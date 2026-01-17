@@ -36,7 +36,15 @@ import {
   RefreshCw,
   TrendingUp,
   Scale,
-  Briefcase
+  Briefcase,
+  Info,
+  CheckSquare,
+  Calendar,
+  User,
+  X,
+  ArrowRightLeft,
+  ListTodo,
+  MoreHorizontal
 } from "lucide-react";
 
 // --- Error Boundary ---
@@ -52,6 +60,11 @@ interface ErrorBoundaryState {
 
 class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   state: ErrorBoundaryState = { hasError: false, error: null };
+  declare props: Readonly<ErrorBoundaryProps>;
+
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+  }
 
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {
     return { hasError: true, error };
@@ -119,6 +132,15 @@ interface RoadmapPhase {
     cost: number;
 }
 
+interface Task {
+    id: string;
+    title: string;
+    assignee: string;
+    dueDate: string;
+    status: "todo" | "in-progress" | "done";
+    priority: "low" | "medium" | "high";
+}
+
 interface R_D_Asset {
   id: string;
   name: string;
@@ -155,6 +177,7 @@ interface R_D_Asset {
   };
   
   roadmap: RoadmapPhase[];
+  tasks: Task[];
 
   // Tokenization
   token_status: "Research" | "Co-Dev" | "Bankable";
@@ -207,6 +230,11 @@ const MOCK_ASSETS: R_D_Asset[] = [
             { phase: "Development", duration_months: 5, deliverables: "Plasma protocol", cost: 120000 },
             { phase: "Validation", duration_months: 3, deliverables: "AATCC Certification", cost: 50000 }
         ],
+        tasks: [
+            { id: "T-101", title: "Acquire SEM imagery of lotus leaf", assignee: "Dr. Aris", dueDate: "2026-02-10", status: "done", priority: "high" },
+            { id: "T-102", title: "Draft patent claims for topography", assignee: "Legal Team", dueDate: "2026-02-25", status: "in-progress", priority: "high" },
+            { id: "T-103", title: "Source biodegradable plasma substrate", assignee: "Procurement", dueDate: "2026-03-01", status: "todo", priority: "medium" }
+        ],
         token_status: "Bankable",
         contract_address: "0x71C...9A23"
     },
@@ -250,6 +278,10 @@ const MOCK_ASSETS: R_D_Asset[] = [
             { phase: "Simulation", duration_months: 6, deliverables: "CFD Validated", cost: 150000 },
             { phase: "Wind Tunnel", duration_months: 4, deliverables: "Scale Model Data", cost: 300000 }
         ],
+        tasks: [
+            { id: "T-201", title: "Run CFD simulations on NACA 0012", assignee: "Sim Team", dueDate: "2026-03-15", status: "in-progress", priority: "high" },
+            { id: "T-202", title: "3D Print 1:50 scale model", assignee: "Lab Tech", dueDate: "2026-04-01", status: "todo", priority: "medium" }
+        ],
         token_status: "Co-Dev"
     }
 ];
@@ -284,6 +316,16 @@ const cleanJson = (text: string) => {
 };
 
 // --- Components ---
+
+const Tooltip = ({ content, children }: { content: string, children?: ReactNode }) => (
+    <div className="group relative flex items-center">
+        {children}
+        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-slate-800 border border-slate-700 rounded-lg text-[10px] text-slate-300 shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+            {content}
+            <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-slate-800"></div>
+        </div>
+    </div>
+);
 
 const SidebarItem = ({
   icon: Icon,
@@ -325,8 +367,8 @@ const TIRChart = ({ scores }: { scores: TIRScore }) => (
                             }`}
                             style={{ height: `${val * 0.6}px` }} // scaling for 60px max height approx
                         />
-                        <div className="absolute -top-6 text-[9px] font-bold text-white opacity-0 group-hover:opacity-100 transition-opacity bg-black px-1 rounded">
-                            {val}
+                         <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity z-10 pointer-events-none whitespace-nowrap">
+                            {key.charAt(0).toUpperCase() + key.slice(1)}: {val}
                         </div>
                      </div>
                      <span className="text-[9px] uppercase text-slate-500 font-mono tracking-tighter">{key.substring(0,4)}</span>
@@ -440,7 +482,27 @@ const BioSolverView = () => {
   });
   const [status, setStatus] = useState<'idle' | 'agents_working' | 'expert_validation' | 'complete'>('idle');
   const [generatedAsset, setGeneratedAsset] = useState<R_D_Asset | null>(null);
+  const [isSuggesting, setIsSuggesting] = useState(false);
   
+  const handleSuggestBottleneck = async () => {
+      setIsSuggesting(true);
+      try {
+          if (!ai) return;
+          const prompt = `Generate a specific, complex, and random technical R&D bottleneck for the "${challengeData.sector}" industry. It should be a problem where nature/biomimicry might offer a solution (e.g. adhesion, friction, structural color, filtration). Output ONLY the one-sentence problem description.`;
+          const response = await ai.models.generateContent({
+              model: "gemini-3-flash-preview",
+              contents: prompt
+          });
+          if (response.text) {
+              setChallengeData(prev => ({...prev, problem: response.text.trim()}));
+          }
+      } catch(e) {
+          console.error(e);
+      } finally {
+          setIsSuggesting(false);
+      }
+  };
+
   const handleSolve = async () => {
     setStatus('agents_working');
     
@@ -459,7 +521,8 @@ const BioSolverView = () => {
             Create a detailed R&D Asset for this problem: "${challengeData.problem}" in the sector: "${challengeData.sector}".
             
             You MUST generate the TIR Scores (Technology, IP, Resources, Market) based on realistic assessment.
-            
+            Also generate 3-5 initial tasks for the roadmap.
+
             Return JSON matching this schema:
             {
                 "name": "Technical Title",
@@ -470,7 +533,8 @@ const BioSolverView = () => {
                 "ip_status": { "freedom_to_operate": "High/Med/Low", "moat_duration_years": number, "patent_filing_strategy": "Strategy description" },
                 "supply_chain": [{ "vendor": "Name", "location": "Country", "capability": "Process", "certification": "ISO..." }],
                 "financials": { "capex_total": number, "roi_horizon_months": number, "revenue_stream": "Model" },
-                "roadmap": [{ "phase": "Name", "duration_months": number, "cost": number, "deliverables": "Output" }]
+                "roadmap": [{ "phase": "Name", "duration_months": number, "cost": number, "deliverables": "Output" }],
+                "tasks": [{ "id": "T-1", "title": "Task Name", "assignee": "Role", "dueDate": "YYYY-MM-DD", "status": "todo", "priority": "high/medium/low" }]
             }
         `;
 
@@ -545,7 +609,9 @@ const BioSolverView = () => {
                           <h3 className="text-sm font-bold text-white mb-3 flex items-center gap-2"><ShieldCheck size={14} className="text-purple-500"/> IP Landscape</h3>
                           <div className="space-y-3 text-sm">
                               <div className="flex justify-between">
-                                  <span className="text-slate-400">Freedom to Operate</span>
+                                  <Tooltip content="Freedom to Operate: Ability to produce without infringing on IP.">
+                                      <span className="text-slate-400 border-b border-dotted border-slate-600 cursor-help">Freedom to Operate</span>
+                                  </Tooltip>
                                   <span className="text-white font-medium text-right max-w-[120px]">{generatedAsset.ip_status?.freedom_to_operate}</span>
                               </div>
                               <div className="flex justify-between">
@@ -646,7 +712,17 @@ const BioSolverView = () => {
                         </div>
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-slate-300 mb-2">Technical Bottleneck</label>
+                        <div className="flex justify-between items-end mb-2">
+                             <label className="block text-sm font-medium text-slate-300">Technical Bottleneck</label>
+                             <button 
+                                onClick={handleSuggestBottleneck}
+                                disabled={isSuggesting}
+                                className="text-xs flex items-center gap-1 text-emerald-400 hover:text-emerald-300 disabled:opacity-50 transition-colors"
+                             >
+                                 {isSuggesting ? <Loader2 size={12} className="animate-spin"/> : <Sparkles size={12}/>}
+                                 Suggest Random Challenge
+                             </button>
+                        </div>
                         <textarea 
                             value={challengeData.problem}
                             onChange={(e) => setChallengeData({...challengeData, problem: e.target.value})}
@@ -691,336 +767,102 @@ const BioSolverView = () => {
   );
 };
 
-const AssetsView = () => {
-    const [selectedAssetId, setSelectedAssetId] = useState<string>(MOCK_ASSETS[0].id);
-    const selectedAsset = MOCK_ASSETS.find(a => a.id === selectedAssetId) || MOCK_ASSETS[0];
+const App = () => {
+    const [view, setView] = useState<View>("dashboard");
 
     return (
-        <div className="h-[calc(100vh-8rem)] flex gap-6 animate-in fade-in duration-500">
-            {/* Left Sidebar: Asset List */}
-            <div className="w-80 flex flex-col gap-4 border-r border-slate-800 pr-6">
-                <div className="flex justify-between items-center mb-2">
-                    <h2 className="text-lg font-bold text-white">Digital Vault</h2>
-                    <button className="p-2 bg-emerald-500/10 text-emerald-400 rounded-lg border border-emerald-500/20 hover:bg-emerald-500/20"><Plus size={16}/></button>
-                </div>
-                <div className="flex-1 overflow-y-auto space-y-3">
-                    {MOCK_ASSETS.map(asset => (
-                        <div 
-                            key={asset.id}
-                            onClick={() => setSelectedAssetId(asset.id)}
-                            className={`p-4 rounded-xl border cursor-pointer transition-all group ${
-                                selectedAsset.id === asset.id 
-                                ? "bg-slate-800 border-emerald-500/50 shadow-lg shadow-emerald-900/10" 
-                                : "bg-slate-900/50 border-slate-800 hover:border-slate-700"
-                            }`}
-                        >
-                            <div className="flex justify-between items-start mb-2">
-                                <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded border ${
-                                    asset.token_status === 'Bankable' ? 'text-emerald-400 bg-emerald-950/30 border-emerald-500/20' : 'text-amber-400 bg-amber-950/30 border-amber-500/20'
-                                }`}>
-                                    {asset.token_status}
-                                </span>
-                                <span className="text-[10px] text-slate-500">{asset.generated_date}</span>
-                            </div>
-                            <h3 className="font-bold text-slate-200 text-sm mb-1 group-hover:text-white transition-colors line-clamp-1">{asset.name}</h3>
-                            <div className="flex justify-between items-end mt-2">
-                                <span className="text-xs text-slate-500">{asset.id}</span>
-                                <div className="flex items-center gap-1">
-                                    <span className="text-[10px] text-slate-500 uppercase">TIR</span>
-                                    <span className={`text-sm font-bold ${asset.tir_scores.composite > 75 ? 'text-emerald-400' : 'text-amber-400'}`}>{asset.tir_scores.composite}</span>
-                                </div>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            </div>
-
-            {/* Main Content: Asset Passport */}
-            <div className="flex-1 overflow-y-auto">
-                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 mb-6 relative overflow-hidden">
-                     <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
-                     <div className="relative z-10 flex justify-between items-start">
-                         <div>
-                             <h1 className="text-2xl font-serif font-bold text-white mb-2">{selectedAsset.name}</h1>
-                             <div className="flex gap-6 text-sm text-slate-400 mb-6">
-                                 <span className="flex items-center gap-2"><Globe size={14}/> {selectedAsset.category}</span>
-                                 <span className="flex items-center gap-2"><ShieldCheck size={14}/> {selectedAsset.risk_profile.toUpperCase()} Risk</span>
-                                 {selectedAsset.contract_address && <span className="flex items-center gap-2 font-mono text-emerald-400"><Link size={14}/> {selectedAsset.contract_address}</span>}
-                             </div>
-                             <div className="flex gap-3">
-                                 <button className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-bold shadow-lg shadow-emerald-900/20 hover:bg-emerald-500 transition-colors">
-                                     Export SPP (PDF)
-                                 </button>
-                                 <button className="px-4 py-2 bg-slate-800 text-slate-300 border border-slate-700 rounded-lg text-sm hover:text-white transition-colors">
-                                     View Full Report
-                                 </button>
-                             </div>
-                         </div>
-                         <div className="bg-white p-2 rounded-lg">
-                             <QrCode size={80} className="text-slate-900"/>
-                         </div>
-                     </div>
-                </div>
-
-                <div className="grid grid-cols-3 gap-6 mb-6">
-                    <div className="col-span-1 bg-slate-900 border border-slate-800 rounded-xl p-5">
-                        <h3 className="text-sm font-bold text-slate-300 mb-4 uppercase tracking-wider">TIR Scoring Analysis</h3>
-                        <TIRChart scores={selectedAsset.tir_scores} />
-                        <div className="mt-4 pt-4 border-t border-slate-800 flex justify-between items-center">
-                            <span className="text-xs text-slate-500">Composite Score</span>
-                            <span className="text-xl font-bold text-emerald-400">{selectedAsset.tir_scores.composite}/100</span>
-                        </div>
-                    </div>
-                    <div className="col-span-2 bg-slate-900 border border-slate-800 rounded-xl p-5 grid grid-cols-2 gap-8">
-                        <div>
-                             <h3 className="text-sm font-bold text-slate-300 mb-4 uppercase tracking-wider">Financial Readiness</h3>
-                             <div className="space-y-3">
-                                 <div className="flex justify-between text-sm">
-                                     <span className="text-slate-400">Total CAPEX (Est.)</span>
-                                     <span className="text-white font-mono">€{selectedAsset.financials.capex_total.toLocaleString()}</span>
-                                 </div>
-                                 <div className="flex justify-between text-sm">
-                                     <span className="text-slate-400">ROI Horizon</span>
-                                     <span className="text-white font-mono">{selectedAsset.financials.roi_horizon_months} months</span>
-                                 </div>
-                                 <div className="flex justify-between text-sm">
-                                     <span className="text-slate-400">Token Status</span>
-                                     <span className="text-emerald-400 font-bold">{selectedAsset.token_status}</span>
-                                 </div>
-                             </div>
+        <ErrorBoundary>
+            <div className="flex h-screen bg-slate-950 text-slate-200 font-sans selection:bg-emerald-500/30">
+                {/* Sidebar */}
+                <div className="w-64 border-r border-slate-800 bg-slate-950 flex flex-col">
+                    <div className="p-6 border-b border-slate-800 flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center shadow-lg shadow-emerald-900/50">
+                            <Dna size={18} className="text-white" />
                         </div>
                         <div>
-                             <h3 className="text-sm font-bold text-slate-300 mb-4 uppercase tracking-wider">Regulatory & IP</h3>
-                             <div className="space-y-3">
-                                 <div className="flex justify-between text-sm">
-                                     <span className="text-slate-400">FTO Status</span>
-                                     <span className="text-white font-medium text-right text-xs max-w-[120px]">{selectedAsset.ip_status.freedom_to_operate}</span>
-                                 </div>
-                                 <div className="flex justify-between text-sm">
-                                     <span className="text-slate-400">EU Alignment</span>
-                                     <span className="text-emerald-400 font-medium text-xs text-right">{selectedAsset.regulatory.alignment}</span>
-                                 </div>
-                             </div>
+                            <div className="font-serif font-bold text-lg tracking-wide text-white">BaaSify</div>
+                            <div className="text-[10px] text-slate-500 uppercase tracking-widest">Biomimicry as a Service</div>
+                        </div>
+                    </div>
+                    
+                    <div className="flex-1 overflow-y-auto py-4">
+                        <div className="px-4 mb-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Platform</div>
+                        <SidebarItem icon={LayoutDashboard} label="Dashboard" active={view === "dashboard"} onClick={() => setView("dashboard")} />
+                        <SidebarItem icon={Microscope} label="BioSolver Engine" active={view === "biosolver"} onClick={() => setView("biosolver")} />
+                        <SidebarItem icon={Database} label="Validated Assets" active={view === "assets"} onClick={() => setView("assets")} />
+                        
+                        <div className="px-4 mt-6 mb-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Marketplace</div>
+                        <SidebarItem icon={ShoppingCart} label="IP Exchange" active={view === "marketplace"} onClick={() => setView("marketplace")} />
+                        <SidebarItem icon={Coins} label="Tokenized SPVs" active={false} onClick={() => {}} />
+                        
+                        <div className="px-4 mt-6 mb-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Admin</div>
+                        <SidebarItem icon={ShieldCheck} label="Compliance" active={view === "compliance"} onClick={() => setView("compliance")} />
+                        <SidebarItem icon={Settings} label="Settings" active={view === "settings"} onClick={() => setView("settings")} />
+                    </div>
+
+                    <div className="p-4 border-t border-slate-800">
+                        <div className="flex items-center gap-3 p-2 rounded-lg bg-slate-900 border border-slate-800">
+                            <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center border border-slate-700">
+                                <User size={14} className="text-slate-400" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <div className="text-xs font-medium text-white truncate">Dr. Aris V.</div>
+                                <div className="text-[10px] text-slate-500 truncate">Lead R&D Architect</div>
+                            </div>
+                            <Settings size={14} className="text-slate-500 cursor-pointer hover:text-white" />
                         </div>
                     </div>
                 </div>
 
-                <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
-                    <h3 className="text-sm font-bold text-slate-300 mb-4 uppercase tracking-wider">Supply Chain & Execution</h3>
-                    <div className="grid grid-cols-2 gap-4">
-                        {selectedAsset.supply_chain.map((sup, i) => (
-                            <div key={i} className="flex items-center gap-3 p-3 bg-slate-950 rounded-lg border border-slate-800">
-                                <div className="w-10 h-10 bg-slate-800 rounded flex items-center justify-center text-slate-500 font-bold">
-                                    {sup.vendor.charAt(0)}
-                                </div>
-                                <div>
-                                    <div className="text-sm font-bold text-slate-200">{sup.vendor}</div>
-                                    <div className="text-xs text-slate-500">{sup.location} • {sup.capability}</div>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
+                {/* Main Content */}
+                <div className="flex-1 flex flex-col overflow-hidden relative">
+                    {/* Header */}
+                    <header className="h-16 border-b border-slate-800 bg-slate-950/50 backdrop-blur-sm flex items-center justify-between px-8 z-10">
+                        <div className="flex items-center gap-4 text-slate-500 text-sm">
+                            <span className="flex items-center gap-2"><Globe size={14}/> Global Node: EU-West</span>
+                            <span className="w-1 h-1 rounded-full bg-slate-700"></span>
+                            <span className="flex items-center gap-2"><Clock size={14}/> Latency: 14ms</span>
+                        </div>
+                        <div className="flex items-center gap-4">
+                            <button className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-800 text-slate-400 transition-colors">
+                                <SearchIcon size={18} />
+                            </button>
+                            <button className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-800 text-slate-400 transition-colors relative">
+                                <BellIcon size={18} />
+                                <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-red-500 border border-slate-950"></span>
+                            </button>
+                        </div>
+                    </header>
+
+                    {/* Scrollable View Area */}
+                    <main className="flex-1 overflow-y-auto p-8 relative">
+                        {/* Background Elements */}
+                        <div className="absolute top-0 left-0 w-full h-96 bg-gradient-to-b from-emerald-900/10 to-transparent pointer-events-none"></div>
+                        
+                        {view === "dashboard" && <DashboardView />}
+                        {view === "biosolver" && <BioSolverView />}
+                        {/* Placeholders for other views */}
+                        {view === "assets" && <div className="text-center text-slate-500 mt-20">Asset Library Module Loaded</div>}
+                        {view === "marketplace" && <div className="text-center text-slate-500 mt-20">IP Marketplace Module Loaded</div>}
+                        {view === "compliance" && <div className="text-center text-slate-500 mt-20">Compliance Engine Loaded</div>}
+                        {view === "settings" && <div className="text-center text-slate-500 mt-20">System Settings Loaded</div>}
+                    </main>
                 </div>
             </div>
-        </div>
+        </ErrorBoundary>
     );
 };
 
-const MarketplaceView = () => (
-    <div className="animate-in fade-in duration-500">
-        <div className="flex justify-between items-center mb-8">
-            <div>
-                <h2 className="text-2xl font-serif font-bold text-slate-200">Solution Marketplace</h2>
-                <p className="text-slate-400 text-sm font-light mt-1">Trade and license verified biomimetic IP assets.</p>
-            </div>
-            <div className="flex gap-3">
-                <button className="flex items-center gap-2 px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 text-sm hover:text-white hover:border-slate-500 transition-colors">
-                    <Filter size={14} /> TIR > 75 (Bankable)
-                </button>
-            </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {MOCK_ASSETS.map((asset) => (
-                <div key={asset.id} className="bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 hover:border-emerald-500/30 rounded-2xl overflow-hidden group cursor-pointer transition-all duration-300 shadow-xl">
-                    <div className="h-40 bg-slate-800 relative p-6 overflow-hidden">
-                        <div className="absolute inset-0 bg-slate-800 opacity-50"></div>
-                        <div className="absolute top-4 right-4 bg-black/40 backdrop-blur px-3 py-1 rounded-full text-[10px] font-mono border border-white/10 flex items-center gap-1 text-white">
-                             {asset.category}
-                        </div>
-                        <Leaf className="text-emerald-500/20 absolute -bottom-4 -left-4" size={120} />
-                        <div className="absolute bottom-4 left-4 z-10">
-                             <div className="text-xs text-slate-400 uppercase tracking-widest mb-1">Composite Score</div>
-                             <div className="text-3xl font-serif font-medium text-white">{asset.tir_scores.composite}</div>
-                        </div>
-                    </div>
-                    <div className="p-6">
-                        <h3 className="font-bold text-white text-lg leading-tight mb-2 group-hover:text-emerald-400 transition-colors line-clamp-1">{asset.name}</h3>
-                        <p className="text-slate-400 text-xs leading-relaxed mb-4 line-clamp-2">
-                             Fully validated solution based on {asset.bio_analogs[0]?.species}. High FTO and EU Green Deal aligned.
-                        </p>
-                        
-                        <div className="flex justify-between items-center text-xs text-slate-500 mb-6 pt-4 border-t border-slate-800">
-                             <span>TRL {asset.trl_current}</span>
-                             <span>{asset.financials.roi_horizon_months}m ROI Horizon</span>
-                        </div>
-
-                        <div className="flex gap-2">
-                            {asset.token_status === 'Bankable' ? (
-                                <button className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-sm font-bold shadow-lg shadow-emerald-900/20">
-                                    License Now
-                                </button>
-                            ) : (
-                                <button className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-sm font-medium border border-slate-700">
-                                    Co-Develop
-                                </button>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            ))}
-        </div>
-    </div>
+const SearchIcon = ({size}: {size: number}) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
 );
 
-const SettingsView = () => (
-    <div className="animate-in fade-in duration-500 max-w-6xl mx-auto h-[calc(100vh-8rem)] overflow-y-auto pr-2 pb-10">
-      <div className="mb-8">
-        <h2 className="text-3xl font-serif font-bold text-white mb-2">Service Models & Billing</h2>
-        <p className="text-slate-400">Choose how you want to collaborate with the BaaS platform. Four tiers designed for scale.</p>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {/* Offer 1 */}
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 flex flex-col">
-              <div className="mb-4">
-                  <div className="w-10 h-10 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center mb-4"><Briefcase size={20}/></div>
-                  <h3 className="text-lg font-bold text-white">Internal R&D CoS</h3>
-                  <p className="text-xs text-slate-400 mt-2 min-h-[40px]">De-risk your own innovation pipeline with verified biomimetic solutions.</p>
-              </div>
-              <ul className="space-y-3 mb-8 flex-1">
-                  <li className="flex gap-2 text-xs text-slate-300"><CheckCircle2 size={14} className="text-blue-500 shrink-0"/> 20-50 Challenges/Year</li>
-                  <li className="flex gap-2 text-xs text-slate-300"><CheckCircle2 size={14} className="text-blue-500 shrink-0"/> Full IP Ownership</li>
-                  <li className="flex gap-2 text-xs text-slate-300"><CheckCircle2 size={14} className="text-blue-500 shrink-0"/> Infra Cost + Margin</li>
-              </ul>
-              <div className="mt-auto">
-                  <div className="text-2xl font-bold text-white mb-4">€4k<span className="text-xs font-normal text-slate-500"> / challenge</span></div>
-                  <button className="w-full py-2 bg-slate-800 text-white rounded-lg border border-slate-700 hover:bg-slate-700 font-medium text-sm">Start Internal</button>
-              </div>
-          </div>
-
-          {/* Offer 2 */}
-          <div className="bg-slate-900 border border-emerald-500/30 rounded-2xl p-6 flex flex-col relative shadow-[0_0_20px_rgba(16,185,129,0.05)]">
-              <div className="mb-4">
-                  <div className="w-10 h-10 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center mb-4"><ShieldCheck size={20}/></div>
-                  <h3 className="text-lg font-bold text-white">Enterprise Licensing</h3>
-                  <p className="text-xs text-slate-400 mt-2 min-h-[40px]">Acquire "Solution Modules" ready for prototyping and scaling.</p>
-              </div>
-              <ul className="space-y-3 mb-8 flex-1">
-                  <li className="flex gap-2 text-xs text-slate-300"><CheckCircle2 size={14} className="text-emerald-500 shrink-0"/> Full Technical Dossier</li>
-                  <li className="flex gap-2 text-xs text-slate-300"><CheckCircle2 size={14} className="text-emerald-500 shrink-0"/> Pre-Qualified Suppliers</li>
-                  <li className="flex gap-2 text-xs text-slate-300"><CheckCircle2 size={14} className="text-emerald-500 shrink-0"/> Geo/Sector Exclusivity</li>
-              </ul>
-              <div className="mt-auto">
-                  <div className="text-2xl font-bold text-white mb-4">€150k<span className="text-xs font-normal text-slate-500"> / license</span></div>
-                  <button className="w-full py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-500 font-bold text-sm shadow-lg shadow-emerald-900/20">License Solution</button>
-              </div>
-          </div>
-
-          {/* Offer 3 */}
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 flex flex-col">
-              <div className="mb-4">
-                  <div className="w-10 h-10 rounded-lg bg-purple-500/10 text-purple-400 flex items-center justify-center mb-4"><Database size={20}/></div>
-                  <h3 className="text-lg font-bold text-white">Marketplace Sub</h3>
-                  <p className="text-xs text-slate-400 mt-2 min-h-[40px]">Continuous access to our stream of verified solutions.</p>
-              </div>
-              <ul className="space-y-3 mb-8 flex-1">
-                  <li className="flex gap-2 text-xs text-slate-300"><CheckCircle2 size={14} className="text-purple-500 shrink-0"/> Read-Only Access (Tier 1)</li>
-                  <li className="flex gap-2 text-xs text-slate-300"><CheckCircle2 size={14} className="text-purple-500 shrink-0"/> Download Assets (Tier 2)</li>
-                  <li className="flex gap-2 text-xs text-slate-300"><CheckCircle2 size={14} className="text-purple-500 shrink-0"/> Priority Support</li>
-              </ul>
-              <div className="mt-auto">
-                  <div className="text-2xl font-bold text-white mb-4">€8k<span className="text-xs font-normal text-slate-500"> / month</span></div>
-                  <button className="w-full py-2 bg-slate-800 text-white rounded-lg border border-slate-700 hover:bg-slate-700 font-medium text-sm">Subscribe Tier 2</button>
-              </div>
-          </div>
-
-          {/* Offer 4 */}
-          <div className="bg-gradient-to-br from-slate-900 to-[#C9A962]/10 border border-[#C9A962]/30 rounded-2xl p-6 flex flex-col relative overflow-hidden">
-               <div className="absolute top-3 right-3 text-[10px] font-mono text-[#C9A962] border border-[#C9A962]/30 px-2 py-0.5 rounded uppercase">ADGM Regulated</div>
-              <div className="mb-4">
-                  <div className="w-10 h-10 rounded-lg bg-[#C9A962]/10 text-[#C9A962] flex items-center justify-center mb-4"><Coins size={20}/></div>
-                  <h3 className="text-lg font-bold text-white">Token RWA</h3>
-                  <p className="text-xs text-slate-400 mt-2 min-h-[40px]">Scale capital via dNFTs representing underlying royalty streams.</p>
-              </div>
-              <ul className="space-y-3 mb-8 flex-1">
-                  <li className="flex gap-2 text-xs text-slate-300"><CheckCircle2 size={14} className="text-[#C9A962] shrink-0"/> Fractional IP Ownership</li>
-                  <li className="flex gap-2 text-xs text-slate-300"><CheckCircle2 size={14} className="text-[#C9A962] shrink-0"/> Royalty Waterfall</li>
-                  <li className="flex gap-2 text-xs text-slate-300"><CheckCircle2 size={14} className="text-[#C9A962] shrink-0"/> Liquid Secondary Market</li>
-              </ul>
-              <div className="mt-auto">
-                  <div className="text-2xl font-bold text-white mb-4">60/40<span className="text-xs font-normal text-slate-500"> Split</span></div>
-                  <button className="w-full py-2 bg-[#C9A962] text-slate-900 rounded-lg hover:bg-[#b89a55] font-bold text-sm">Invest in SPV</button>
-              </div>
-          </div>
-      </div>
-    </div>
+const BellIcon = ({size}: {size: number}) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
 );
 
-const App = () => {
-  const [currentView, setCurrentView] = useState<View>("dashboard");
-
-  return (
-    <div className="flex min-h-screen bg-slate-950 font-sans text-slate-200 selection:bg-emerald-500/30">
-      <aside className="w-64 border-r border-slate-800 flex flex-col fixed h-full bg-slate-950 z-10">
-        <div className="p-6">
-          <div className="flex items-center gap-3 text-emerald-500 mb-8">
-            <div className="w-8 h-8 rounded-lg bg-emerald-500 flex items-center justify-center"><Dna size={20} className="text-white" /></div>
-            <span className="text-xl font-bold tracking-tight text-white">BaaS<span className="font-light text-emerald-500">ify</span></span>
-          </div>
-          <div className="mb-6 px-4 py-3 bg-gradient-to-r from-slate-900 to-slate-800 border border-slate-700 rounded-xl flex flex-col gap-1 cursor-pointer hover:border-emerald-500/50 transition-colors group">
-            <span className="text-[10px] text-slate-500 font-bold tracking-wider uppercase">Current Node</span>
-            <div className="flex items-center justify-between"><span className="text-sm font-bold text-white group-hover:text-emerald-400 transition-colors">Paris-Industrial-1</span><div className="w-2 h-2 rounded-full bg-emerald-500 shrink-0 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div></div>
-          </div>
-        </div>
-        <nav className="flex-1 space-y-1 px-2">
-          <SidebarItem icon={LayoutDashboard} label="Dashboard" active={currentView === "dashboard"} onClick={() => setCurrentView("dashboard")} />
-          <SidebarItem icon={Microscope} label="Bio-Solver (Agent)" active={currentView === "biosolver"} onClick={() => setCurrentView("biosolver")} />
-          <SidebarItem icon={ShoppingCart} label="Marketplace" active={currentView === "marketplace"} onClick={() => setCurrentView("marketplace")} />
-          <SidebarItem icon={Lock} label="Digital Vault" active={currentView === "assets"} onClick={() => setCurrentView("assets")} />
-          <SidebarItem icon={ShieldCheck} label="Compliance" active={currentView === "compliance"} onClick={() => setCurrentView("compliance")} />
-        </nav>
-        <div className="p-4 border-t border-slate-800">
-          <SidebarItem icon={Briefcase} label="Business Models" active={currentView === "settings"} onClick={() => setCurrentView("settings")} />
-        </div>
-      </aside>
-
-      <main className="ml-64 flex-1 p-8">
-        <header className="flex items-center justify-between mb-8">
-            <div className="flex items-center gap-2 text-sm text-slate-500 font-medium">
-                <span className="hover:text-slate-300 cursor-pointer">Platform</span>
-                <ChevronRight size={14} />
-                <span className="text-white capitalize bg-slate-900 px-2 py-1 rounded border border-slate-800">{currentView === "biosolver" ? "Biomimetic Solver" : currentView === 'assets' ? 'Asset Passport' : currentView === 'settings' ? 'Monetization' : currentView}</span>
-            </div>
-            <div className="flex items-center gap-4">
-                 <button className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-full text-xs text-slate-400 hover:text-white hover:border-slate-500 transition-colors">
-                    <Globe size={12} /> EU Green Deal Ready
-                 </button>
-            </div>
-        </header>
-        
-        <ErrorBoundary>
-            {currentView === "dashboard" && <DashboardView />}
-            {currentView === "biosolver" && <BioSolverView />}
-            {currentView === "marketplace" && <MarketplaceView />}
-            {currentView === "assets" && <AssetsView />}
-            {currentView === "compliance" && <div className="flex flex-col items-center justify-center h-[60vh] text-slate-500"><ShieldCheck size={48} className="text-emerald-600 mb-4" /><h2 className="text-2xl font-bold text-white mb-2">Regulatory Compliance</h2><p>Auto-Generated SPP (Sustainable Product Passports).</p></div>}
-            {currentView === "settings" && <SettingsView />}
-        </ErrorBoundary>
-      </main>
-    </div>
-  );
-};
-
-const root = createRoot(document.getElementById("root")!);
-root.render(<App />);
+const container = document.getElementById("root");
+if (container) {
+  const root = createRoot(container);
+  root.render(<App />);
+}
