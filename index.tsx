@@ -45,7 +45,14 @@ import {
   ArrowRightLeft,
   ListTodo,
   MoreHorizontal,
-  ClipboardList
+  ClipboardList,
+  Recycle,
+  Droplets,
+  Wind,
+  Factory,
+  Truck,
+  Trash2,
+  Search
 } from "lucide-react";
 
 // --- Error Boundary ---
@@ -61,10 +68,6 @@ interface ErrorBoundaryState {
 
 class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   state: ErrorBoundaryState = { hasError: false, error: null };
-
-  constructor(props: ErrorBoundaryProps) {
-    super(props);
-  }
 
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {
     return { hasError: true, error };
@@ -141,6 +144,29 @@ interface Task {
     priority: "low" | "medium" | "high";
 }
 
+interface SPP {
+    id: string;
+    status: "Draft" | "Certified" | "Pending";
+    generatedDate: string;
+    metrics: {
+        co2_footprint_kg: number;
+        water_usage_liters: number;
+        recyclability_percent: number;
+        energy_efficiency_grade: "A" | "B" | "C" | "D";
+    };
+    materials: {
+        name: string;
+        percentage: number;
+        origin: "Bio-based" | "Recycled" | "Virgin" | "Synthetic";
+    }[];
+    lifecycle: {
+        stage: string;
+        impact_score: number; // 1-10
+        description: string;
+    }[];
+    certifications: string[];
+}
+
 interface R_D_Asset {
   id: string;
   name: string;
@@ -182,6 +208,9 @@ interface R_D_Asset {
   // Tokenization
   token_status: "Research" | "Co-Dev" | "Bankable";
   contract_address?: string;
+  
+  // Compliance
+  spp?: SPP;
 }
 
 // --- Mock Data (Based on "Omniphobic" Example) ---
@@ -236,7 +265,30 @@ const MOCK_ASSETS: R_D_Asset[] = [
             { id: "T-103", title: "Source biodegradable plasma substrate", assignee: "Procurement", dueDate: "2026-03-01", status: "todo", priority: "medium" }
         ],
         token_status: "Bankable",
-        contract_address: "0x71C...9A23"
+        contract_address: "0x71C...9A23",
+        spp: {
+            id: "SPP-TX-001",
+            status: "Certified",
+            generatedDate: "2026-01-20",
+            metrics: {
+                co2_footprint_kg: 4.2,
+                water_usage_liters: 120,
+                recyclability_percent: 98,
+                energy_efficiency_grade: "A"
+            },
+            materials: [
+                { name: "Cellulose Fiber", percentage: 85, origin: "Bio-based" },
+                { name: "Plasma Treatment", percentage: 5, origin: "Synthetic" },
+                { name: "Bio-binder", percentage: 10, origin: "Bio-based" }
+            ],
+            lifecycle: [
+                { stage: "Sourcing", impact_score: 2, description: "FSC Certified pulp" },
+                { stage: "Manufacturing", impact_score: 4, description: "Low-temp plasma" },
+                { stage: "Use Phase", impact_score: 1, description: "Wash-less cleaning" },
+                { stage: "End of Life", impact_score: 1, description: "Biodegradable" }
+            ],
+            certifications: ["Oeko-Tex 100", "EU Ecolabel"]
+        }
     },
     {
         id: "WIND-BIONIC-BL-042",
@@ -1289,6 +1341,257 @@ const MarketplaceView = () => (
     </div>
 );
 
+const ComplianceView = () => {
+    // In a real app, this would use global state
+    const [assets, setAssets] = useState<R_D_Asset[]>(MOCK_ASSETS);
+    const [selectedAssetId, setSelectedAssetId] = useState<string>(MOCK_ASSETS[0].id);
+    const [searchQuery, setSearchQuery] = useState("");
+    const [isGenerating, setIsGenerating] = useState(false);
+
+    const selectedAsset = assets.find(a => a.id === selectedAssetId) || assets[0];
+    const filteredAssets = assets.filter(a => a.name.toLowerCase().includes(searchQuery.toLowerCase()) || a.id.toLowerCase().includes(searchQuery.toLowerCase()));
+
+    const handleGenerateSPP = async () => {
+        setIsGenerating(true);
+        try {
+             if (!ai) throw new Error("AI not initialized");
+             const prompt = `
+                Generate a sustainable product passport (SPP) JSON for this industrial asset: 
+                Name: ${selectedAsset.name}
+                Category: ${selectedAsset.category}
+                Bio-Analog: ${selectedAsset.bio_analogs[0]?.species}
+
+                Estimate realistic environmental metrics.
+                Output JSON strictly adhering to this schema:
+                {
+                    "co2_footprint_kg": number,
+                    "water_usage_liters": number,
+                    "recyclability_percent": number,
+                    "energy_efficiency_grade": "A" | "B" | "C" | "D",
+                    "materials": [{"name": string, "percentage": number, "origin": "Bio-based" | "Recycled" | "Virgin" | "Synthetic"}],
+                    "lifecycle": [{"stage": "Manufacturing" | "Distribution" | "Use" | "End of Life", "impact_score": number (1-10), "description": string}],
+                    "certifications": string[]
+                }
+             `;
+
+             const response = await ai.models.generateContent({
+                model: "gemini-3-flash-preview",
+                contents: prompt,
+                config: { responseMimeType: "application/json" }
+            });
+
+            const data = JSON.parse(cleanJson(response.text || "{}"));
+            
+            const newSPP: SPP = {
+                id: `SPP-${Date.now().toString().slice(-6)}`,
+                status: "Certified",
+                generatedDate: new Date().toISOString().split('T')[0],
+                metrics: {
+                    co2_footprint_kg: data.co2_footprint_kg || 10,
+                    water_usage_liters: data.water_usage_liters || 100,
+                    recyclability_percent: data.recyclability_percent || 80,
+                    energy_efficiency_grade: data.energy_efficiency_grade || "B"
+                },
+                materials: data.materials || [],
+                lifecycle: data.lifecycle || [],
+                certifications: data.certifications || []
+            };
+
+            setAssets(prev => prev.map(a => a.id === selectedAssetId ? { ...a, spp: newSPP } : a));
+
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setIsGenerating(false);
+        }
+    };
+
+    return (
+        <div className="h-[calc(100vh-8rem)] flex gap-6 animate-in fade-in duration-500">
+             {/* Left Sidebar: Asset Audit List */}
+             <div className="w-80 flex flex-col gap-4 border-r border-slate-800 pr-6">
+                <div className="mb-2">
+                    <h2 className="text-lg font-bold text-white mb-4">Audit Queue</h2>
+                    <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
+                        <input 
+                            type="text" 
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            placeholder="Filter assets..."
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg pl-9 pr-3 py-2 text-sm text-white focus:border-emerald-500 outline-none"
+                        />
+                    </div>
+                </div>
+                <div className="flex-1 overflow-y-auto space-y-2">
+                    {filteredAssets.map(asset => (
+                        <div 
+                            key={asset.id}
+                            onClick={() => setSelectedAssetId(asset.id)}
+                            className={`p-3 rounded-xl border transition-all cursor-pointer ${
+                                selectedAsset.id === asset.id 
+                                ? "bg-slate-800 border-emerald-500/50 shadow-md" 
+                                : "bg-slate-900/30 border-slate-800 hover:border-slate-700"
+                            }`}
+                        >
+                            <div className="flex justify-between items-start mb-1">
+                                <span className={`w-2 h-2 rounded-full mt-1.5 ${asset.spp ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-slate-600'}`}></span>
+                                <span className="text-[10px] text-slate-500 font-mono">{asset.id}</span>
+                            </div>
+                            <h3 className={`text-sm font-medium ${selectedAsset.id === asset.id ? 'text-white' : 'text-slate-400'} ml-4 line-clamp-1`}>{asset.name}</h3>
+                            <div className="ml-4 mt-1">
+                                {asset.spp ? (
+                                    <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded flex w-fit items-center gap-1">
+                                        <CheckCircle2 size={8}/> Passport Ready
+                                    </span>
+                                ) : (
+                                    <span className="text-[10px] bg-slate-800 text-slate-500 border border-slate-700 px-1.5 py-0.5 rounded">Pending Audit</span>
+                                )}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            {/* Main Content: Digital Product Passport */}
+            <div className="flex-1 overflow-y-auto">
+                {selectedAsset.spp ? (
+                    <div className="space-y-6">
+                        {/* Passport Header */}
+                        <div className="bg-gradient-to-r from-emerald-950/30 to-slate-900 border border-emerald-500/30 rounded-2xl p-6 relative overflow-hidden">
+                            <div className="absolute top-0 right-0 p-6 opacity-20">
+                                <QrCode size={120} className="text-emerald-500"/>
+                            </div>
+                            <div className="relative z-10 flex gap-6">
+                                <div className="bg-white p-2 rounded-xl shadow-xl">
+                                    <QrCode size={80} className="text-slate-900"/>
+                                </div>
+                                <div>
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <h1 className="text-2xl font-serif font-bold text-white tracking-wide">Digital Product Passport</h1>
+                                        <span className="bg-emerald-500 text-slate-900 text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider">Verified</span>
+                                    </div>
+                                    <p className="text-slate-300 font-medium mb-1">{selectedAsset.name}</p>
+                                    <p className="text-xs text-slate-500 font-mono">UUID: {selectedAsset.spp.id} • REV: 1.0 • {selectedAsset.spp.generatedDate}</p>
+                                    <div className="flex gap-2 mt-4">
+                                        {selectedAsset.spp.certifications.map(c => (
+                                            <span key={c} className="text-[10px] border border-slate-600 rounded px-2 py-1 text-slate-400">{c}</span>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Metrics Grid */}
+                        <div className="grid grid-cols-3 gap-6">
+                            <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 hover:border-emerald-500/20 transition-colors">
+                                <div className="flex justify-between items-start mb-2">
+                                    <span className="text-xs text-slate-500 uppercase tracking-wider">Carbon Footprint</span>
+                                    <Wind size={16} className="text-slate-400"/>
+                                </div>
+                                <div className="text-3xl font-bold text-white mb-1">{selectedAsset.spp.metrics.co2_footprint_kg} <span className="text-sm font-normal text-slate-500">kg CO2e</span></div>
+                                <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                                    <div className="bg-gradient-to-r from-emerald-500 to-emerald-300 h-full rounded-full" style={{ width: '35%' }}></div>
+                                </div>
+                                <div className="text-[10px] text-emerald-400 mt-2">Top 10% of category</div>
+                            </div>
+
+                            <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 hover:border-blue-500/20 transition-colors">
+                                <div className="flex justify-between items-start mb-2">
+                                    <span className="text-xs text-slate-500 uppercase tracking-wider">Water Intensity</span>
+                                    <Droplets size={16} className="text-blue-400"/>
+                                </div>
+                                <div className="text-3xl font-bold text-white mb-1">{selectedAsset.spp.metrics.water_usage_liters} <span className="text-sm font-normal text-slate-500">L / unit</span></div>
+                                <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                                    <div className="bg-blue-500 h-full rounded-full" style={{ width: '20%' }}></div>
+                                </div>
+                                <div className="text-[10px] text-blue-400 mt-2">-40% vs conventional</div>
+                            </div>
+
+                            <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 hover:border-amber-500/20 transition-colors">
+                                <div className="flex justify-between items-start mb-2">
+                                    <span className="text-xs text-slate-500 uppercase tracking-wider">Circularity</span>
+                                    <Recycle size={16} className="text-amber-400"/>
+                                </div>
+                                <div className="text-3xl font-bold text-white mb-1">{selectedAsset.spp.metrics.recyclability_percent}% <span className="text-sm font-normal text-slate-500">Recyclable</span></div>
+                                <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                                    <div className="bg-amber-400 h-full rounded-full" style={{ width: `${selectedAsset.spp.metrics.recyclability_percent}%` }}></div>
+                                </div>
+                                <div className="text-[10px] text-amber-400 mt-2">Design for Disassembly</div>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-6">
+                            {/* Composition */}
+                            <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+                                <h3 className="text-sm font-bold text-white mb-6">Material Composition</h3>
+                                <div className="space-y-4">
+                                    {selectedAsset.spp.materials.map((m, i) => (
+                                        <div key={i}>
+                                            <div className="flex justify-between text-xs mb-1">
+                                                <span className="text-slate-300">{m.name}</span>
+                                                <span className="text-slate-500">{m.percentage}%</span>
+                                            </div>
+                                            <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden flex">
+                                                <div 
+                                                    className={`h-full ${m.origin === 'Bio-based' ? 'bg-emerald-500' : m.origin === 'Recycled' ? 'bg-blue-500' : 'bg-slate-600'}`} 
+                                                    style={{ width: `${m.percentage}%` }}
+                                                ></div>
+                                            </div>
+                                            <div className="text-[10px] text-slate-600 mt-0.5 text-right">{m.origin}</div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Lifecycle */}
+                            <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+                                <h3 className="text-sm font-bold text-white mb-6">Lifecycle Assessment (LCA)</h3>
+                                <div className="space-y-0 relative border-l border-slate-800 ml-2">
+                                    {selectedAsset.spp.lifecycle.map((step, i) => (
+                                        <div key={i} className="pl-6 pb-6 relative last:pb-0">
+                                            <div className="absolute -left-[9px] top-1 w-4 h-4 rounded-full bg-slate-900 border-2 border-slate-700 flex items-center justify-center">
+                                                <div className="w-1.5 h-1.5 bg-slate-500 rounded-full"></div>
+                                            </div>
+                                            <div className="flex justify-between items-start">
+                                                <div>
+                                                    <h4 className="text-sm font-medium text-slate-200">{step.stage}</h4>
+                                                    <p className="text-xs text-slate-500 mt-1">{step.description}</p>
+                                                </div>
+                                                <span className={`text-xs font-bold ${step.impact_score < 4 ? 'text-emerald-500' : 'text-amber-500'}`}>
+                                                    Impact: {step.impact_score}/10
+                                                </span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="h-full flex flex-col items-center justify-center p-8 text-center bg-slate-900/30 rounded-2xl border-2 border-dashed border-slate-800">
+                        <div className="w-20 h-20 bg-slate-800 rounded-full flex items-center justify-center mb-6">
+                            <ShieldCheck size={40} className="text-slate-600"/>
+                        </div>
+                        <h2 className="text-2xl font-bold text-white mb-2">No Passport Found</h2>
+                        <p className="text-slate-400 max-w-md mb-8">
+                            This asset has not yet undergone the environmental impact audit required for the EU Green Deal compliance.
+                        </p>
+                        <button 
+                            onClick={handleGenerateSPP}
+                            disabled={isGenerating}
+                            className="px-8 py-3 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 text-white rounded-xl font-bold shadow-lg shadow-emerald-900/20 flex items-center gap-2 transition-all"
+                        >
+                            {isGenerating ? <Loader2 size={18} className="animate-spin"/> : <Sparkles size={18}/>}
+                            {isGenerating ? "Auditing Asset..." : "Generate Digital Passport"}
+                        </button>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
 const SettingsView = () => (
     <div className="animate-in fade-in duration-500 max-w-6xl mx-auto h-[calc(100vh-8rem)] overflow-y-auto pr-2 pb-10">
       <div className="mb-8">
@@ -1420,7 +1723,7 @@ const App = () => {
             {currentView === "biosolver" && <BioSolverView />}
             {currentView === "marketplace" && <MarketplaceView />}
             {currentView === "assets" && <AssetsView />}
-            {currentView === "compliance" && <div className="flex flex-col items-center justify-center h-[60vh] text-slate-500"><ShieldCheck size={48} className="text-emerald-600 mb-4" /><h2 className="text-2xl font-bold text-white mb-2">Regulatory Compliance</h2><p>Auto-Generated SPP (Sustainable Product Passports).</p></div>}
+            {currentView === "compliance" && <ComplianceView />}
             {currentView === "settings" && <SettingsView />}
         </ErrorBoundary>
       </main>
