@@ -1,0 +1,1026 @@
+import React, { useState, useEffect, useRef, Component, ReactNode, ErrorInfo } from "react";
+import { createRoot } from "react-dom/client";
+import { GoogleGenAI, Type } from "@google/genai";
+import {
+  LayoutDashboard,
+  Dna,
+  Leaf,
+  ShoppingCart,
+  Settings,
+  Plus,
+  ChevronRight,
+  Play,
+  Loader2,
+  ShieldCheck,
+  Globe,
+  FileText,
+  Microscope,
+  Lock,
+  Database,
+  CheckCircle2,
+  Clock,
+  QrCode,
+  Blocks,
+  Link,
+  Coins,
+  Receipt,
+  BarChart3,
+  Eye,
+  Wallet,
+  Zap,
+  Share2,
+  Download,
+  Filter,
+  Sparkles,
+  AlertTriangle,
+  RefreshCw,
+  TrendingUp,
+  Scale,
+  Briefcase
+} from "lucide-react";
+
+// --- Error Boundary ---
+
+interface ErrorBoundaryProps {
+  children: ReactNode;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  state: ErrorBoundaryState = { hasError: false, error: null };
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error("Uncaught error:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-8 text-slate-200">
+          <div className="bg-slate-900 border border-red-500/30 rounded-2xl p-8 max-w-lg w-full shadow-2xl">
+            <div className="flex items-center gap-3 mb-4 text-red-500">
+              <AlertTriangle size={32} />
+              <h1 className="text-xl font-bold">System Encountered an Error</h1>
+            </div>
+            <p className="text-slate-400 mb-6 text-sm">
+              The application encountered an unexpected state. This is often caused by malformed data from the AI model.
+            </p>
+            <button 
+              onClick={() => window.location.reload()} 
+              className="w-full py-3 bg-red-600/10 hover:bg-red-600/20 text-red-500 border border-red-600/50 rounded-lg flex items-center justify-center gap-2 transition-colors font-medium"
+            >
+              <RefreshCw size={16} /> Reboot System
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+// --- Types (BaaS v2 Architecture) ---
+
+type View = "dashboard" | "biosolver" | "marketplace" | "assets" | "compliance" | "settings";
+
+interface TIRScore {
+    technology: number; // 30% weight
+    ip: number;         // 25% weight
+    resources: number;  // 25% weight
+    market: number;     // 20% weight
+    composite: number;  // 0-100
+}
+
+interface BioAnalog {
+    species: string;
+    mechanism: string;
+    key_attribute: string;
+}
+
+interface Supplier {
+    vendor: string;
+    location: string;
+    capability: string;
+    certification: string;
+}
+
+interface RoadmapPhase {
+    phase: string;
+    duration_months: number;
+    deliverables: string;
+    cost: number;
+}
+
+interface R_D_Asset {
+  id: string;
+  name: string;
+  category: string;
+  generated_date: string;
+  
+  // Scoring & Readiness
+  tir_scores: TIRScore;
+  trl_current: number;
+  trl_target: number;
+  risk_profile: "low" | "medium" | "high";
+  
+  // Deep Data
+  bio_analogs: BioAnalog[];
+  
+  ip_status: {
+    blocking_patents: string[];
+    freedom_to_operate: string;
+    patent_filing_strategy: string;
+    moat_duration_years: number;
+  };
+  
+  supply_chain: Supplier[];
+  
+  financials: {
+    capex_total: number;
+    roi_horizon_months: number;
+    revenue_stream: string;
+  };
+
+  regulatory: {
+      alignment: string;
+      standards: string[];
+  };
+  
+  roadmap: RoadmapPhase[];
+
+  // Tokenization
+  token_status: "Research" | "Co-Dev" | "Bankable";
+  contract_address?: string;
+}
+
+// --- Mock Data (Based on "Omniphobic" Example) ---
+
+const MOCK_ASSETS: R_D_Asset[] = [
+    {
+        id: "OMNIP-STRUC-TX-001",
+        name: "Structural Omniphobic Textile (PFAS-Free)",
+        category: "Advanced Materials",
+        generated_date: "2026-01-15",
+        tir_scores: {
+            technology: 81,
+            ip: 72,
+            resources: 79,
+            market: 88,
+            composite: 80
+        },
+        trl_current: 4,
+        trl_target: 7,
+        risk_profile: "medium",
+        bio_analogs: [
+            { species: "Nelumbo nucifera", mechanism: "Hierarchical micro/nano topography", key_attribute: "Superhydrophobicity" },
+            { species: "Stenocara gracilipes", mechanism: "Hydrophilic bumps + hydrophobic troughs", key_attribute: "Directional Flow" }
+        ],
+        ip_status: {
+            blocking_patents: ["US10428461B2"],
+            freedom_to_operate: "HIGH (substrate textile focus + plasma process)",
+            patent_filing_strategy: "Utility Model on Topography",
+            moat_duration_years: 18
+        },
+        supply_chain: [
+            { vendor: "Beyond Surface Tech", location: "Switzerland", capability: "Plasma etching", certification: "ISO 9001" },
+            { vendor: "OrganoClick", location: "Sweden", capability: "Bio-binders", certification: "EUDR" }
+        ],
+        financials: {
+            capex_total: 450000,
+            roi_horizon_months: 24,
+            revenue_stream: "Licensing fee + Royalty per meter"
+        },
+        regulatory: {
+            alignment: "EU Green Deal / REACH Compliant",
+            standards: ["ISO 20347", "AATCC 22"]
+        },
+        roadmap: [
+            { phase: "Discovery", duration_months: 2, deliverables: "SEM analysis", cost: 45000 },
+            { phase: "Development", duration_months: 5, deliverables: "Plasma protocol", cost: 120000 },
+            { phase: "Validation", duration_months: 3, deliverables: "AATCC Certification", cost: 50000 }
+        ],
+        token_status: "Bankable",
+        contract_address: "0x71C...9A23"
+    },
+    {
+        id: "WIND-BIONIC-BL-042",
+        name: "Tubercle Turbine Blade Efficiency",
+        category: "Energy",
+        generated_date: "2026-01-10",
+        tir_scores: {
+            technology: 72,
+            ip: 64,
+            resources: 68,
+            market: 71,
+            composite: 69
+        },
+        trl_current: 5,
+        trl_target: 8,
+        risk_profile: "high",
+        bio_analogs: [
+            { species: "Megaptera novaeangliae", mechanism: "Leading edge tubercles", key_attribute: "Stall Delay" }
+        ],
+        ip_status: {
+            blocking_patents: ["WO2021045982A1"],
+            freedom_to_operate: "MEDIUM (Requires cross-licensing)",
+            patent_filing_strategy: "Design Patent",
+            moat_duration_years: 12
+        },
+        supply_chain: [
+            { vendor: "LM Wind Power", location: "Denmark", capability: "Composite molding", certification: "ISO 14001" }
+        ],
+        financials: {
+            capex_total: 1200000,
+            roi_horizon_months: 48,
+            revenue_stream: "Asset Sale"
+        },
+        regulatory: {
+            alignment: "IEC 61400 Compliant",
+            standards: ["IEC 61400-1"]
+        },
+        roadmap: [
+            { phase: "Simulation", duration_months: 6, deliverables: "CFD Validated", cost: 150000 },
+            { phase: "Wind Tunnel", duration_months: 4, deliverables: "Scale Model Data", cost: 300000 }
+        ],
+        token_status: "Co-Dev"
+    }
+];
+
+// --- API Client ---
+
+let ai: GoogleGenAI;
+try {
+    ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+} catch (e) {
+    console.error("Failed to initialize GoogleGenAI", e);
+}
+
+const cleanJson = (text: string) => {
+    if (!text) return "{}";
+    const firstBrace = text.indexOf('{');
+    const firstBracket = text.indexOf('[');
+    let start = -1;
+    if (firstBrace === -1 && firstBracket === -1) return "{}";
+    if (firstBrace !== -1 && firstBracket === -1) start = firstBrace;
+    else if (firstBrace === -1 && firstBracket !== -1) start = firstBracket;
+    else start = Math.min(firstBrace, firstBracket);
+    const lastBrace = text.lastIndexOf('}');
+    const lastBracket = text.lastIndexOf(']');
+    let end = -1;
+    if (lastBrace === -1 && lastBracket === -1) return "{}";
+    if (lastBrace !== -1 && lastBracket === -1) end = lastBrace;
+    else if (lastBrace === -1 && lastBracket !== -1) end = lastBracket;
+    else end = Math.max(lastBrace, lastBracket);
+    if (start === -1 || end === -1 || start > end) return "{}";
+    return text.substring(start, end + 1);
+};
+
+// --- Components ---
+
+const SidebarItem = ({
+  icon: Icon,
+  label,
+  active,
+  onClick,
+}: {
+  icon: any;
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) => (
+  <button
+    onClick={onClick}
+    className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium transition-colors ${
+      active
+        ? "bg-emerald-500/10 text-emerald-400 border-r-2 border-emerald-500"
+        : "text-slate-400 hover:text-slate-100 hover:bg-slate-800/50"
+    }`}
+  >
+    <Icon size={18} />
+    {label}
+  </button>
+);
+
+const TIRChart = ({ scores }: { scores: TIRScore }) => (
+    <div className="flex gap-2 h-24 items-end justify-between px-2 pt-4 pb-0 bg-slate-900/50 rounded-lg border border-slate-800 relative">
+        <div className="absolute top-2 right-2 text-[10px] text-slate-500 font-mono">TIR ANALYSIS</div>
+        {['technology', 'ip', 'resources', 'market'].map((key) => {
+            const val = scores[key as keyof TIRScore];
+            return (
+                <div key={key} className="flex flex-col items-center gap-1 w-full group">
+                     <div className="relative w-full flex justify-center">
+                        <div 
+                            className={`w-3 rounded-t-sm transition-all duration-1000 ${
+                                key === 'technology' ? 'bg-blue-500' :
+                                key === 'ip' ? 'bg-purple-500' :
+                                key === 'resources' ? 'bg-emerald-500' : 'bg-gold'
+                            }`}
+                            style={{ height: `${val * 0.6}px` }} // scaling for 60px max height approx
+                        />
+                        <div className="absolute -top-6 text-[9px] font-bold text-white opacity-0 group-hover:opacity-100 transition-opacity bg-black px-1 rounded">
+                            {val}
+                        </div>
+                     </div>
+                     <span className="text-[9px] uppercase text-slate-500 font-mono tracking-tighter">{key.substring(0,4)}</span>
+                </div>
+            )
+        })}
+    </div>
+);
+
+// --- Views ---
+
+const DashboardView = () => {
+  const [animationPhase, setAnimationPhase] = useState(0);
+  
+  useEffect(() => {
+    const timer = setTimeout(() => setAnimationPhase(1), 100);
+    const timer2 = setTimeout(() => setAnimationPhase(2), 400);
+    return () => { clearTimeout(timer); clearTimeout(timer2); };
+  }, []);
+
+  return (
+    <div className="relative min-h-full">
+        <div className={`mb-8 transition-all duration-700 ${animationPhase >= 1 ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4'}`}>
+            <h1 className="text-3xl font-serif text-transparent bg-clip-text bg-gradient-to-r from-slate-200 to-gold font-semibold tracking-wide">
+                R&D Ecosystem Overview
+            </h1>
+            <p className="text-xs font-mono text-slate-500 tracking-widest uppercase mt-1">
+                BaaSify v2.0 • TIR Engine Active
+            </p>
+        </div>
+
+        <section className={`grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-4 mb-8 transition-all duration-1000 delay-200 ${animationPhase >= 2 ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
+          {[
+            { label: 'Active SPVs', value: "3", icon: Blocks, color: '#C9A962' },
+            { label: 'Avg TIR Score', value: "72.4", icon: BarChart3, color: '#4ECDC4' },
+            { label: 'Bankable Assets', value: "8", icon: Wallet, color: '#10B981' },
+            { label: 'Pipeline Value', value: "€4.2M", icon: TrendingUp, color: '#8B5CF6' },
+          ].map((metric) => (
+            <div key={metric.label} className="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 relative overflow-hidden group hover:border-emerald-500/30 transition-all">
+              <div className="absolute -top-3 -right-3 opacity-5 group-hover:opacity-10 transition-opacity" style={{ color: metric.color }}>
+                <metric.icon size={80} />
+              </div>
+              <div className="text-[10px] font-mono text-slate-500 tracking-widest uppercase mb-2">
+                {metric.label}
+              </div>
+              <div className="text-2xl font-light font-serif" style={{ color: metric.color }}>
+                {metric.value}
+              </div>
+            </div>
+          ))}
+        </section>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl p-6">
+                <div className="flex justify-between items-center mb-6">
+                    <h3 className="text-lg font-medium text-slate-200">Recent Validated Solutions</h3>
+                    <button className="text-xs text-emerald-500 hover:text-emerald-400">View All</button>
+                </div>
+                <div className="space-y-4">
+                    {MOCK_ASSETS.map(asset => (
+                        <div key={asset.id} className="p-4 bg-slate-950/50 rounded-xl border border-slate-800 hover:border-slate-700 transition-colors flex justify-between items-center">
+                            <div>
+                                <div className="flex items-center gap-2 mb-1">
+                                    <span className="text-xs font-bold text-white">{asset.name}</span>
+                                    <span className={`text-[10px] px-2 py-0.5 rounded-full border ${asset.token_status === 'Bankable' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border-amber-500/20'}`}>
+                                        {asset.token_status}
+                                    </span>
+                                </div>
+                                <div className="text-xs text-slate-500 font-mono">{asset.id} • {asset.category}</div>
+                            </div>
+                            <div className="text-right">
+                                <div className="text-xs text-slate-500 mb-0.5">TIR Score</div>
+                                <div className={`text-lg font-bold ${asset.tir_scores.composite > 75 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                                    {asset.tir_scores.composite}/100
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+             <div className="bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 rounded-2xl p-6">
+                <h3 className="text-lg font-medium text-slate-200 mb-4">Agent Network Status</h3>
+                <div className="space-y-4">
+                    {[
+                        { name: "Agent Indexeur", task: "Scraping bio-lit", status: "Idle", color: "bg-blue-500" },
+                        { name: "Agent Brevets", task: "FTO Analysis", status: "Active", color: "bg-purple-500" },
+                        { name: "Agent Transposeur", task: "Supplier Match", status: "Active", color: "bg-emerald-500" },
+                        { name: "Agent Synthétiseur", task: "Roadmap Gen", status: "Idle", color: "bg-gold" }
+                    ].map((agent, i) => (
+                        <div key={i} className="flex items-center justify-between text-sm">
+                            <div className="flex items-center gap-3">
+                                <div className={`w-2 h-2 rounded-full ${agent.status === 'Active' ? agent.color + ' animate-pulse' : 'bg-slate-700'}`} />
+                                <span className="text-slate-300">{agent.name}</span>
+                            </div>
+                            <span className="text-xs text-slate-500">{agent.status === 'Active' ? agent.task : 'Waiting'}</span>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </div>
+    </div>
+  );
+};
+
+const BioSolverView = () => {
+  const [step, setStep] = useState(1);
+  const [challengeData, setChallengeData] = useState({
+    sector: "Textile",
+    problem: "",
+    constraints: "PFAS-Free"
+  });
+  const [status, setStatus] = useState<'idle' | 'agents_working' | 'expert_validation' | 'complete'>('idle');
+  const [generatedAsset, setGeneratedAsset] = useState<R_D_Asset | null>(null);
+  
+  const handleSolve = async () => {
+    setStatus('agents_working');
+    
+    try {
+        if (!ai) throw new Error("AI not initialized");
+        
+        // Simulating the 4-step agent pipeline delay
+        await new Promise(r => setTimeout(r, 2000)); // Indexer
+        await new Promise(r => setTimeout(r, 2000)); // Patent
+        await new Promise(r => setTimeout(r, 2000)); // Transposer
+        setStatus('expert_validation');
+        await new Promise(r => setTimeout(r, 1500)); // Expert
+
+        const prompt = `
+            Act as the "Synthesizer Agent" for the BaaS platform. 
+            Create a detailed R&D Asset for this problem: "${challengeData.problem}" in the sector: "${challengeData.sector}".
+            
+            You MUST generate the TIR Scores (Technology, IP, Resources, Market) based on realistic assessment.
+            
+            Return JSON matching this schema:
+            {
+                "name": "Technical Title",
+                "category": "Industry Category",
+                "tir_scores": { "technology": 0-100, "ip": 0-100, "resources": 0-100, "market": 0-100, "composite": 0-100 },
+                "trl_current": 1-9,
+                "bio_analogs": [{ "species": "Latin Name", "mechanism": "Short description", "key_attribute": "Benefit" }],
+                "ip_status": { "freedom_to_operate": "High/Med/Low", "moat_duration_years": number, "patent_filing_strategy": "Strategy description" },
+                "supply_chain": [{ "vendor": "Name", "location": "Country", "capability": "Process", "certification": "ISO..." }],
+                "financials": { "capex_total": number, "roi_horizon_months": number, "revenue_stream": "Model" },
+                "roadmap": [{ "phase": "Name", "duration_months": number, "cost": number, "deliverables": "Output" }]
+            }
+        `;
+
+        const response = await ai.models.generateContent({
+            model: "gemini-3-flash-preview",
+            contents: prompt,
+            config: { responseMimeType: "application/json" }
+        });
+
+        const data = JSON.parse(cleanJson(response.text || "{}"));
+        
+        // Enrich with ID and default structure
+        const asset: R_D_Asset = {
+            id: `GEN-${Date.now().toString().slice(-6)}`,
+            generated_date: new Date().toISOString().split('T')[0],
+            risk_profile: data.tir_scores?.composite > 70 ? "low" : "medium",
+            token_status: data.tir_scores?.composite > 75 ? "Bankable" : "Co-Dev",
+            regulatory: { alignment: "EU Green Deal / REACH", standards: ["ISO 14040"] },
+            trl_target: 8,
+            ...data
+        };
+
+        setGeneratedAsset(asset);
+        setStatus('complete');
+
+    } catch (e) {
+        console.error(e);
+        setStatus('idle');
+    }
+  };
+
+  if (status === 'complete' && generatedAsset) {
+      return (
+          <div className="animate-in fade-in slide-in-from-bottom-8 duration-700">
+              <div className="flex justify-between items-start mb-6 border-b border-slate-800 pb-6">
+                  <div>
+                      <div className="flex items-center gap-2 mb-2">
+                          <span className="text-xs font-mono text-emerald-500 bg-emerald-950/30 px-2 py-1 rounded border border-emerald-500/20">
+                             {generatedAsset.token_status.toUpperCase()}
+                          </span>
+                          <span className="text-xs text-slate-500">ID: {generatedAsset.id}</span>
+                      </div>
+                      <h1 className="text-3xl font-serif text-white mb-2">{generatedAsset.name}</h1>
+                      <div className="flex gap-4 text-sm text-slate-400">
+                          <span>{generatedAsset.category}</span>
+                          <span>•</span>
+                          <span>TRL {generatedAsset.trl_current} → {generatedAsset.trl_target}</span>
+                      </div>
+                  </div>
+                  <div className="flex gap-4">
+                      <div className="text-right">
+                        <div className="text-[10px] text-slate-500 uppercase tracking-widest mb-1">Confidence Score</div>
+                        <div className="text-3xl font-bold text-emerald-400">{generatedAsset.tir_scores.composite}<span className="text-sm text-slate-600">/100</span></div>
+                      </div>
+                      <TIRChart scores={generatedAsset.tir_scores} />
+                  </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-6">
+                  {/* Left Column: Bio & IP */}
+                  <div className="space-y-6">
+                      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
+                          <h3 className="text-sm font-bold text-white mb-3 flex items-center gap-2"><Leaf size={14} className="text-emerald-500"/> Bio-Analogs</h3>
+                          {generatedAsset.bio_analogs?.map((bio, i) => (
+                              <div key={i} className="mb-3 last:mb-0 p-3 bg-slate-950 rounded border border-slate-800">
+                                  <div className="italic text-emerald-400 text-sm">{bio.species}</div>
+                                  <div className="text-xs text-slate-400 mt-1">{bio.mechanism}</div>
+                              </div>
+                          ))}
+                      </div>
+                       <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
+                          <h3 className="text-sm font-bold text-white mb-3 flex items-center gap-2"><ShieldCheck size={14} className="text-purple-500"/> IP Landscape</h3>
+                          <div className="space-y-3 text-sm">
+                              <div className="flex justify-between">
+                                  <span className="text-slate-400">Freedom to Operate</span>
+                                  <span className="text-white font-medium text-right max-w-[120px]">{generatedAsset.ip_status?.freedom_to_operate}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                  <span className="text-slate-400">Moat Duration</span>
+                                  <span className="text-white font-medium">{generatedAsset.ip_status?.moat_duration_years} Years</span>
+                              </div>
+                               <div className="p-2 bg-purple-500/10 rounded border border-purple-500/20 text-xs text-purple-300 mt-2">
+                                  Strategy: {generatedAsset.ip_status?.patent_filing_strategy}
+                              </div>
+                          </div>
+                      </div>
+                  </div>
+
+                  {/* Middle Column: Roadmap & Supply */}
+                  <div className="space-y-6">
+                      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
+                          <h3 className="text-sm font-bold text-white mb-3 flex items-center gap-2"><Database size={14} className="text-blue-500"/> Supply Chain</h3>
+                           {generatedAsset.supply_chain?.map((sup, i) => (
+                              <div key={i} className="mb-2 p-2 flex justify-between items-center border-b border-slate-800/50 last:border-0">
+                                  <div>
+                                      <div className="text-sm text-white">{sup.vendor}</div>
+                                      <div className="text-[10px] text-slate-500">{sup.location}</div>
+                                  </div>
+                                  <div className="text-[10px] bg-slate-800 px-2 py-1 rounded text-slate-300">{sup.certification}</div>
+                              </div>
+                          ))}
+                      </div>
+                      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
+                          <h3 className="text-sm font-bold text-white mb-3 flex items-center gap-2"><TrendingUp size={14} className="text-gold"/> Financials</h3>
+                          <div className="grid grid-cols-2 gap-4 mb-4">
+                              <div className="text-center p-2 bg-slate-950 rounded">
+                                  <div className="text-[10px] text-slate-500 uppercase">CAPEX</div>
+                                  <div className="text-sm font-bold text-white">€{generatedAsset.financials?.capex_total?.toLocaleString()}</div>
+                              </div>
+                              <div className="text-center p-2 bg-slate-950 rounded">
+                                  <div className="text-[10px] text-slate-500 uppercase">ROI Horizon</div>
+                                  <div className="text-sm font-bold text-emerald-400">{generatedAsset.financials?.roi_horizon_months} mths</div>
+                              </div>
+                          </div>
+                          <div className="text-xs text-slate-400 border-t border-slate-800 pt-2">
+                              Model: {generatedAsset.financials?.revenue_stream}
+                          </div>
+                      </div>
+                  </div>
+
+                  {/* Right Column: Actions */}
+                  <div className="space-y-4">
+                      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
+                          <h3 className="text-sm font-bold text-white mb-4">Validation Roadmap</h3>
+                          <div className="space-y-4 relative pl-4 border-l border-slate-800 ml-2">
+                              {generatedAsset.roadmap?.map((phase, i) => (
+                                  <div key={i} className="relative">
+                                      <div className="absolute -left-[21px] top-1 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-slate-900"></div>
+                                      <div className="text-xs text-emerald-500 font-mono mb-0.5">{phase.phase}</div>
+                                      <div className="text-sm text-white mb-1">{phase.deliverables}</div>
+                                      <div className="text-[10px] text-slate-500">€{phase.cost.toLocaleString()} • {phase.duration_months} mo</div>
+                                  </div>
+                              ))}
+                          </div>
+                      </div>
+                      <button 
+                        onClick={() => setStatus('idle')}
+                        className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-lg border border-slate-600 transition-all text-sm font-medium"
+                      >
+                          Start New Simulation
+                      </button>
+                      <button className="w-full py-3 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white rounded-lg shadow-lg shadow-emerald-900/20 transition-all text-sm font-bold flex items-center justify-center gap-2">
+                          <Wallet size={16} /> Save to Vault
+                      </button>
+                  </div>
+              </div>
+          </div>
+      );
+  }
+
+  return (
+    <div className="max-w-4xl mx-auto py-10">
+        {status === 'idle' ? (
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl">
+                <div className="mb-8">
+                    <h2 className="text-2xl font-serif font-bold text-white mb-2">New Industrial Challenge</h2>
+                    <p className="text-slate-400 text-sm">Orchestrate the 4-Agent Pipeline to find high-TIR biomimetic solutions.</p>
+                </div>
+                
+                <div className="space-y-6">
+                    <div>
+                        <label className="block text-sm font-medium text-slate-300 mb-2">Industrial Sector</label>
+                        <div className="flex gap-3">
+                            {["Textile", "Energy", "Construction", "Aerospace"].map(s => (
+                                <button 
+                                    key={s}
+                                    onClick={() => setChallengeData({...challengeData, sector: s})}
+                                    className={`px-4 py-2 rounded-lg text-sm border transition-all ${challengeData.sector === s ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400' : 'bg-slate-950 border-slate-700 text-slate-400'}`}
+                                >
+                                    {s}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-slate-300 mb-2">Technical Bottleneck</label>
+                        <textarea 
+                            value={challengeData.problem}
+                            onChange={(e) => setChallengeData({...challengeData, problem: e.target.value})}
+                            placeholder="e.g. Reduce friction in pipelines using shark-skin textures..."
+                            className="w-full h-32 bg-slate-950 border border-slate-700 rounded-xl p-4 text-white placeholder-slate-600 focus:border-emerald-500 outline-none transition-all"
+                        />
+                    </div>
+                    <button 
+                        onClick={handleSolve}
+                        disabled={!challengeData.problem}
+                        className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/20"
+                    >
+                        <Zap size={20} fill="currentColor" /> Deploy Agents
+                    </button>
+                </div>
+            </div>
+        ) : (
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-12 text-center">
+                <div className="w-20 h-20 mx-auto mb-8 relative">
+                    <div className="absolute inset-0 rounded-full border-4 border-slate-800"></div>
+                    <div className="absolute inset-0 rounded-full border-4 border-emerald-500 border-t-transparent animate-spin"></div>
+                    <Dna className="absolute inset-0 m-auto text-emerald-500 animate-pulse" size={32} />
+                </div>
+                
+                <h3 className="text-xl font-bold text-white mb-2">
+                    {status === 'agents_working' && "Agents Orchestration Active"}
+                    {status === 'expert_validation' && "Expert Validation & Scoring"}
+                </h3>
+                <p className="text-slate-400 text-sm max-w-md mx-auto">
+                    {status === 'agents_working' && "Indexeur searching analogs... Brevets analyzing FTO... Transposeur matching suppliers..."}
+                    {status === 'expert_validation' && "Calculating TIR Score (Tech, IP, Resources, Market)... Generating Regulatory Alignment Report..."}
+                </p>
+
+                <div className="mt-8 flex justify-center gap-2">
+                    {['Index', 'Patent', 'Supply', 'Synth', 'Expert'].map((step, i) => (
+                        <div key={step} className={`w-2 h-2 rounded-full transition-all duration-500 ${i < (status === 'expert_validation' ? 4 : 2) ? 'bg-emerald-500' : 'bg-slate-800'}`} />
+                    ))}
+                </div>
+            </div>
+        )}
+    </div>
+  );
+};
+
+const AssetsView = () => {
+    const [selectedAssetId, setSelectedAssetId] = useState<string>(MOCK_ASSETS[0].id);
+    const selectedAsset = MOCK_ASSETS.find(a => a.id === selectedAssetId) || MOCK_ASSETS[0];
+
+    return (
+        <div className="h-[calc(100vh-8rem)] flex gap-6 animate-in fade-in duration-500">
+            {/* Left Sidebar: Asset List */}
+            <div className="w-80 flex flex-col gap-4 border-r border-slate-800 pr-6">
+                <div className="flex justify-between items-center mb-2">
+                    <h2 className="text-lg font-bold text-white">Digital Vault</h2>
+                    <button className="p-2 bg-emerald-500/10 text-emerald-400 rounded-lg border border-emerald-500/20 hover:bg-emerald-500/20"><Plus size={16}/></button>
+                </div>
+                <div className="flex-1 overflow-y-auto space-y-3">
+                    {MOCK_ASSETS.map(asset => (
+                        <div 
+                            key={asset.id}
+                            onClick={() => setSelectedAssetId(asset.id)}
+                            className={`p-4 rounded-xl border cursor-pointer transition-all group ${
+                                selectedAsset.id === asset.id 
+                                ? "bg-slate-800 border-emerald-500/50 shadow-lg shadow-emerald-900/10" 
+                                : "bg-slate-900/50 border-slate-800 hover:border-slate-700"
+                            }`}
+                        >
+                            <div className="flex justify-between items-start mb-2">
+                                <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded border ${
+                                    asset.token_status === 'Bankable' ? 'text-emerald-400 bg-emerald-950/30 border-emerald-500/20' : 'text-amber-400 bg-amber-950/30 border-amber-500/20'
+                                }`}>
+                                    {asset.token_status}
+                                </span>
+                                <span className="text-[10px] text-slate-500">{asset.generated_date}</span>
+                            </div>
+                            <h3 className="font-bold text-slate-200 text-sm mb-1 group-hover:text-white transition-colors line-clamp-1">{asset.name}</h3>
+                            <div className="flex justify-between items-end mt-2">
+                                <span className="text-xs text-slate-500">{asset.id}</span>
+                                <div className="flex items-center gap-1">
+                                    <span className="text-[10px] text-slate-500 uppercase">TIR</span>
+                                    <span className={`text-sm font-bold ${asset.tir_scores.composite > 75 ? 'text-emerald-400' : 'text-amber-400'}`}>{asset.tir_scores.composite}</span>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            {/* Main Content: Asset Passport */}
+            <div className="flex-1 overflow-y-auto">
+                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 mb-6 relative overflow-hidden">
+                     <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+                     <div className="relative z-10 flex justify-between items-start">
+                         <div>
+                             <h1 className="text-2xl font-serif font-bold text-white mb-2">{selectedAsset.name}</h1>
+                             <div className="flex gap-6 text-sm text-slate-400 mb-6">
+                                 <span className="flex items-center gap-2"><Globe size={14}/> {selectedAsset.category}</span>
+                                 <span className="flex items-center gap-2"><ShieldCheck size={14}/> {selectedAsset.risk_profile.toUpperCase()} Risk</span>
+                                 {selectedAsset.contract_address && <span className="flex items-center gap-2 font-mono text-emerald-400"><Link size={14}/> {selectedAsset.contract_address}</span>}
+                             </div>
+                             <div className="flex gap-3">
+                                 <button className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-bold shadow-lg shadow-emerald-900/20 hover:bg-emerald-500 transition-colors">
+                                     Export SPP (PDF)
+                                 </button>
+                                 <button className="px-4 py-2 bg-slate-800 text-slate-300 border border-slate-700 rounded-lg text-sm hover:text-white transition-colors">
+                                     View Full Report
+                                 </button>
+                             </div>
+                         </div>
+                         <div className="bg-white p-2 rounded-lg">
+                             <QrCode size={80} className="text-slate-900"/>
+                         </div>
+                     </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-6 mb-6">
+                    <div className="col-span-1 bg-slate-900 border border-slate-800 rounded-xl p-5">
+                        <h3 className="text-sm font-bold text-slate-300 mb-4 uppercase tracking-wider">TIR Scoring Analysis</h3>
+                        <TIRChart scores={selectedAsset.tir_scores} />
+                        <div className="mt-4 pt-4 border-t border-slate-800 flex justify-between items-center">
+                            <span className="text-xs text-slate-500">Composite Score</span>
+                            <span className="text-xl font-bold text-emerald-400">{selectedAsset.tir_scores.composite}/100</span>
+                        </div>
+                    </div>
+                    <div className="col-span-2 bg-slate-900 border border-slate-800 rounded-xl p-5 grid grid-cols-2 gap-8">
+                        <div>
+                             <h3 className="text-sm font-bold text-slate-300 mb-4 uppercase tracking-wider">Financial Readiness</h3>
+                             <div className="space-y-3">
+                                 <div className="flex justify-between text-sm">
+                                     <span className="text-slate-400">Total CAPEX (Est.)</span>
+                                     <span className="text-white font-mono">€{selectedAsset.financials.capex_total.toLocaleString()}</span>
+                                 </div>
+                                 <div className="flex justify-between text-sm">
+                                     <span className="text-slate-400">ROI Horizon</span>
+                                     <span className="text-white font-mono">{selectedAsset.financials.roi_horizon_months} months</span>
+                                 </div>
+                                 <div className="flex justify-between text-sm">
+                                     <span className="text-slate-400">Token Status</span>
+                                     <span className="text-emerald-400 font-bold">{selectedAsset.token_status}</span>
+                                 </div>
+                             </div>
+                        </div>
+                        <div>
+                             <h3 className="text-sm font-bold text-slate-300 mb-4 uppercase tracking-wider">Regulatory & IP</h3>
+                             <div className="space-y-3">
+                                 <div className="flex justify-between text-sm">
+                                     <span className="text-slate-400">FTO Status</span>
+                                     <span className="text-white font-medium text-right text-xs max-w-[120px]">{selectedAsset.ip_status.freedom_to_operate}</span>
+                                 </div>
+                                 <div className="flex justify-between text-sm">
+                                     <span className="text-slate-400">EU Alignment</span>
+                                     <span className="text-emerald-400 font-medium text-xs text-right">{selectedAsset.regulatory.alignment}</span>
+                                 </div>
+                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+                    <h3 className="text-sm font-bold text-slate-300 mb-4 uppercase tracking-wider">Supply Chain & Execution</h3>
+                    <div className="grid grid-cols-2 gap-4">
+                        {selectedAsset.supply_chain.map((sup, i) => (
+                            <div key={i} className="flex items-center gap-3 p-3 bg-slate-950 rounded-lg border border-slate-800">
+                                <div className="w-10 h-10 bg-slate-800 rounded flex items-center justify-center text-slate-500 font-bold">
+                                    {sup.vendor.charAt(0)}
+                                </div>
+                                <div>
+                                    <div className="text-sm font-bold text-slate-200">{sup.vendor}</div>
+                                    <div className="text-xs text-slate-500">{sup.location} • {sup.capability}</div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const MarketplaceView = () => (
+    <div className="animate-in fade-in duration-500">
+        <div className="flex justify-between items-center mb-8">
+            <div>
+                <h2 className="text-2xl font-serif font-bold text-slate-200">Solution Marketplace</h2>
+                <p className="text-slate-400 text-sm font-light mt-1">Trade and license verified biomimetic IP assets.</p>
+            </div>
+            <div className="flex gap-3">
+                <button className="flex items-center gap-2 px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 text-sm hover:text-white hover:border-slate-500 transition-colors">
+                    <Filter size={14} /> TIR > 75 (Bankable)
+                </button>
+            </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {MOCK_ASSETS.map((asset) => (
+                <div key={asset.id} className="bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 hover:border-emerald-500/30 rounded-2xl overflow-hidden group cursor-pointer transition-all duration-300 shadow-xl">
+                    <div className="h-40 bg-slate-800 relative p-6 overflow-hidden">
+                        <div className="absolute inset-0 bg-slate-800 opacity-50"></div>
+                        <div className="absolute top-4 right-4 bg-black/40 backdrop-blur px-3 py-1 rounded-full text-[10px] font-mono border border-white/10 flex items-center gap-1 text-white">
+                             {asset.category}
+                        </div>
+                        <Leaf className="text-emerald-500/20 absolute -bottom-4 -left-4" size={120} />
+                        <div className="absolute bottom-4 left-4 z-10">
+                             <div className="text-xs text-slate-400 uppercase tracking-widest mb-1">Composite Score</div>
+                             <div className="text-3xl font-serif font-medium text-white">{asset.tir_scores.composite}</div>
+                        </div>
+                    </div>
+                    <div className="p-6">
+                        <h3 className="font-bold text-white text-lg leading-tight mb-2 group-hover:text-emerald-400 transition-colors line-clamp-1">{asset.name}</h3>
+                        <p className="text-slate-400 text-xs leading-relaxed mb-4 line-clamp-2">
+                             Fully validated solution based on {asset.bio_analogs[0]?.species}. High FTO and EU Green Deal aligned.
+                        </p>
+                        
+                        <div className="flex justify-between items-center text-xs text-slate-500 mb-6 pt-4 border-t border-slate-800">
+                             <span>TRL {asset.trl_current}</span>
+                             <span>{asset.financials.roi_horizon_months}m ROI Horizon</span>
+                        </div>
+
+                        <div className="flex gap-2">
+                            {asset.token_status === 'Bankable' ? (
+                                <button className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-sm font-bold shadow-lg shadow-emerald-900/20">
+                                    License Now
+                                </button>
+                            ) : (
+                                <button className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-sm font-medium border border-slate-700">
+                                    Co-Develop
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            ))}
+        </div>
+    </div>
+);
+
+const SettingsView = () => (
+    <div className="animate-in fade-in duration-500 max-w-6xl mx-auto h-[calc(100vh-8rem)] overflow-y-auto pr-2 pb-10">
+      <div className="mb-8">
+        <h2 className="text-3xl font-serif font-bold text-white mb-2">Service Models & Billing</h2>
+        <p className="text-slate-400">Choose how you want to collaborate with the BaaS platform. Four tiers designed for scale.</p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {/* Offer 1 */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 flex flex-col">
+              <div className="mb-4">
+                  <div className="w-10 h-10 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center mb-4"><Briefcase size={20}/></div>
+                  <h3 className="text-lg font-bold text-white">Internal R&D CoS</h3>
+                  <p className="text-xs text-slate-400 mt-2 min-h-[40px]">De-risk your own innovation pipeline with verified biomimetic solutions.</p>
+              </div>
+              <ul className="space-y-3 mb-8 flex-1">
+                  <li className="flex gap-2 text-xs text-slate-300"><CheckCircle2 size={14} className="text-blue-500 shrink-0"/> 20-50 Challenges/Year</li>
+                  <li className="flex gap-2 text-xs text-slate-300"><CheckCircle2 size={14} className="text-blue-500 shrink-0"/> Full IP Ownership</li>
+                  <li className="flex gap-2 text-xs text-slate-300"><CheckCircle2 size={14} className="text-blue-500 shrink-0"/> Infra Cost + Margin</li>
+              </ul>
+              <div className="mt-auto">
+                  <div className="text-2xl font-bold text-white mb-4">€4k<span className="text-xs font-normal text-slate-500"> / challenge</span></div>
+                  <button className="w-full py-2 bg-slate-800 text-white rounded-lg border border-slate-700 hover:bg-slate-700 font-medium text-sm">Start Internal</button>
+              </div>
+          </div>
+
+          {/* Offer 2 */}
+          <div className="bg-slate-900 border border-emerald-500/30 rounded-2xl p-6 flex flex-col relative shadow-[0_0_20px_rgba(16,185,129,0.05)]">
+              <div className="mb-4">
+                  <div className="w-10 h-10 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center mb-4"><ShieldCheck size={20}/></div>
+                  <h3 className="text-lg font-bold text-white">Enterprise Licensing</h3>
+                  <p className="text-xs text-slate-400 mt-2 min-h-[40px]">Acquire "Solution Modules" ready for prototyping and scaling.</p>
+              </div>
+              <ul className="space-y-3 mb-8 flex-1">
+                  <li className="flex gap-2 text-xs text-slate-300"><CheckCircle2 size={14} className="text-emerald-500 shrink-0"/> Full Technical Dossier</li>
+                  <li className="flex gap-2 text-xs text-slate-300"><CheckCircle2 size={14} className="text-emerald-500 shrink-0"/> Pre-Qualified Suppliers</li>
+                  <li className="flex gap-2 text-xs text-slate-300"><CheckCircle2 size={14} className="text-emerald-500 shrink-0"/> Geo/Sector Exclusivity</li>
+              </ul>
+              <div className="mt-auto">
+                  <div className="text-2xl font-bold text-white mb-4">€150k<span className="text-xs font-normal text-slate-500"> / license</span></div>
+                  <button className="w-full py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-500 font-bold text-sm shadow-lg shadow-emerald-900/20">License Solution</button>
+              </div>
+          </div>
+
+          {/* Offer 3 */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 flex flex-col">
+              <div className="mb-4">
+                  <div className="w-10 h-10 rounded-lg bg-purple-500/10 text-purple-400 flex items-center justify-center mb-4"><Database size={20}/></div>
+                  <h3 className="text-lg font-bold text-white">Marketplace Sub</h3>
+                  <p className="text-xs text-slate-400 mt-2 min-h-[40px]">Continuous access to our stream of verified solutions.</p>
+              </div>
+              <ul className="space-y-3 mb-8 flex-1">
+                  <li className="flex gap-2 text-xs text-slate-300"><CheckCircle2 size={14} className="text-purple-500 shrink-0"/> Read-Only Access (Tier 1)</li>
+                  <li className="flex gap-2 text-xs text-slate-300"><CheckCircle2 size={14} className="text-purple-500 shrink-0"/> Download Assets (Tier 2)</li>
+                  <li className="flex gap-2 text-xs text-slate-300"><CheckCircle2 size={14} className="text-purple-500 shrink-0"/> Priority Support</li>
+              </ul>
+              <div className="mt-auto">
+                  <div className="text-2xl font-bold text-white mb-4">€8k<span className="text-xs font-normal text-slate-500"> / month</span></div>
+                  <button className="w-full py-2 bg-slate-800 text-white rounded-lg border border-slate-700 hover:bg-slate-700 font-medium text-sm">Subscribe Tier 2</button>
+              </div>
+          </div>
+
+          {/* Offer 4 */}
+          <div className="bg-gradient-to-br from-slate-900 to-[#C9A962]/10 border border-[#C9A962]/30 rounded-2xl p-6 flex flex-col relative overflow-hidden">
+               <div className="absolute top-3 right-3 text-[10px] font-mono text-[#C9A962] border border-[#C9A962]/30 px-2 py-0.5 rounded uppercase">ADGM Regulated</div>
+              <div className="mb-4">
+                  <div className="w-10 h-10 rounded-lg bg-[#C9A962]/10 text-[#C9A962] flex items-center justify-center mb-4"><Coins size={20}/></div>
+                  <h3 className="text-lg font-bold text-white">Token RWA</h3>
+                  <p className="text-xs text-slate-400 mt-2 min-h-[40px]">Scale capital via dNFTs representing underlying royalty streams.</p>
+              </div>
+              <ul className="space-y-3 mb-8 flex-1">
+                  <li className="flex gap-2 text-xs text-slate-300"><CheckCircle2 size={14} className="text-[#C9A962] shrink-0"/> Fractional IP Ownership</li>
+                  <li className="flex gap-2 text-xs text-slate-300"><CheckCircle2 size={14} className="text-[#C9A962] shrink-0"/> Royalty Waterfall</li>
+                  <li className="flex gap-2 text-xs text-slate-300"><CheckCircle2 size={14} className="text-[#C9A962] shrink-0"/> Liquid Secondary Market</li>
+              </ul>
+              <div className="mt-auto">
+                  <div className="text-2xl font-bold text-white mb-4">60/40<span className="text-xs font-normal text-slate-500"> Split</span></div>
+                  <button className="w-full py-2 bg-[#C9A962] text-slate-900 rounded-lg hover:bg-[#b89a55] font-bold text-sm">Invest in SPV</button>
+              </div>
+          </div>
+      </div>
+    </div>
+);
+
+const App = () => {
+  const [currentView, setCurrentView] = useState<View>("dashboard");
+
+  return (
+    <div className="flex min-h-screen bg-slate-950 font-sans text-slate-200 selection:bg-emerald-500/30">
+      <aside className="w-64 border-r border-slate-800 flex flex-col fixed h-full bg-slate-950 z-10">
+        <div className="p-6">
+          <div className="flex items-center gap-3 text-emerald-500 mb-8">
+            <div className="w-8 h-8 rounded-lg bg-emerald-500 flex items-center justify-center"><Dna size={20} className="text-white" /></div>
+            <span className="text-xl font-bold tracking-tight text-white">BaaS<span className="font-light text-emerald-500">ify</span></span>
+          </div>
+          <div className="mb-6 px-4 py-3 bg-gradient-to-r from-slate-900 to-slate-800 border border-slate-700 rounded-xl flex flex-col gap-1 cursor-pointer hover:border-emerald-500/50 transition-colors group">
+            <span className="text-[10px] text-slate-500 font-bold tracking-wider uppercase">Current Node</span>
+            <div className="flex items-center justify-between"><span className="text-sm font-bold text-white group-hover:text-emerald-400 transition-colors">Paris-Industrial-1</span><div className="w-2 h-2 rounded-full bg-emerald-500 shrink-0 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div></div>
+          </div>
+        </div>
+        <nav className="flex-1 space-y-1 px-2">
+          <SidebarItem icon={LayoutDashboard} label="Dashboard" active={currentView === "dashboard"} onClick={() => setCurrentView("dashboard")} />
+          <SidebarItem icon={Microscope} label="Bio-Solver (Agent)" active={currentView === "biosolver"} onClick={() => setCurrentView("biosolver")} />
+          <SidebarItem icon={ShoppingCart} label="Marketplace" active={currentView === "marketplace"} onClick={() => setCurrentView("marketplace")} />
+          <SidebarItem icon={Lock} label="Digital Vault" active={currentView === "assets"} onClick={() => setCurrentView("assets")} />
+          <SidebarItem icon={ShieldCheck} label="Compliance" active={currentView === "compliance"} onClick={() => setCurrentView("compliance")} />
+        </nav>
+        <div className="p-4 border-t border-slate-800">
+          <SidebarItem icon={Briefcase} label="Business Models" active={currentView === "settings"} onClick={() => setCurrentView("settings")} />
+        </div>
+      </aside>
+
+      <main className="ml-64 flex-1 p-8">
+        <header className="flex items-center justify-between mb-8">
+            <div className="flex items-center gap-2 text-sm text-slate-500 font-medium">
+                <span className="hover:text-slate-300 cursor-pointer">Platform</span>
+                <ChevronRight size={14} />
+                <span className="text-white capitalize bg-slate-900 px-2 py-1 rounded border border-slate-800">{currentView === "biosolver" ? "Biomimetic Solver" : currentView === 'assets' ? 'Asset Passport' : currentView === 'settings' ? 'Monetization' : currentView}</span>
+            </div>
+            <div className="flex items-center gap-4">
+                 <button className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-full text-xs text-slate-400 hover:text-white hover:border-slate-500 transition-colors">
+                    <Globe size={12} /> EU Green Deal Ready
+                 </button>
+            </div>
+        </header>
+        
+        <ErrorBoundary>
+            {currentView === "dashboard" && <DashboardView />}
+            {currentView === "biosolver" && <BioSolverView />}
+            {currentView === "marketplace" && <MarketplaceView />}
+            {currentView === "assets" && <AssetsView />}
+            {currentView === "compliance" && <div className="flex flex-col items-center justify-center h-[60vh] text-slate-500"><ShieldCheck size={48} className="text-emerald-600 mb-4" /><h2 className="text-2xl font-bold text-white mb-2">Regulatory Compliance</h2><p>Auto-Generated SPP (Sustainable Product Passports).</p></div>}
+            {currentView === "settings" && <SettingsView />}
+        </ErrorBoundary>
+      </main>
+    </div>
+  );
+};
+
+const root = createRoot(document.getElementById("root")!);
+root.render(<App />);
