@@ -213,6 +213,13 @@ interface R_D_Asset {
   spp?: SPP;
 }
 
+interface LogEntry {
+    timestamp: string;
+    agent: "System" | "Indexer" | "Patent" | "Supplier" | "Synthesizer";
+    message: string;
+    status: "info" | "success" | "warning" | "error";
+}
+
 // --- Mock Data (Based on "Omniphobic" Example) ---
 
 const MOCK_ASSETS: R_D_Asset[] = [
@@ -553,6 +560,44 @@ const TaskBoard = ({ tasks, onTaskUpdate, onAddTask }: { tasks: Task[], onTaskUp
     );
 };
 
+const AgentTerminal = ({ logs }: { logs: LogEntry[] }) => {
+    const bottomRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    }, [logs]);
+
+    return (
+        <div className="bg-slate-950 rounded-xl border border-slate-800 p-4 font-mono text-xs h-64 overflow-y-auto shadow-inner relative">
+            <div className="absolute top-2 right-3 flex gap-1.5">
+                <div className="w-2.5 h-2.5 rounded-full bg-red-500/20 border border-red-500/50"></div>
+                <div className="w-2.5 h-2.5 rounded-full bg-amber-500/20 border border-amber-500/50"></div>
+                <div className="w-2.5 h-2.5 rounded-full bg-emerald-500/20 border border-emerald-500/50"></div>
+            </div>
+            <div className="space-y-1.5 pt-2">
+                {logs.map((log, i) => (
+                    <div key={i} className="flex gap-3 opacity-0 animate-in fade-in slide-in-from-left-2 duration-300 fill-mode-forwards">
+                        <span className="text-slate-600 shrink-0">[{log.timestamp}]</span>
+                        <span className={`font-bold shrink-0 w-24 ${
+                            log.agent === 'System' ? 'text-blue-400' :
+                            log.agent === 'Indexer' ? 'text-purple-400' :
+                            log.agent === 'Patent' ? 'text-pink-400' :
+                            log.agent === 'Supplier' ? 'text-amber-400' : 'text-emerald-400'
+                        }`}>{log.agent}:</span>
+                        <span className={`${
+                            log.status === 'success' ? 'text-emerald-300' :
+                            log.status === 'warning' ? 'text-amber-300' :
+                            log.status === 'error' ? 'text-red-400' : 'text-slate-300'
+                        }`}>{log.message}</span>
+                    </div>
+                ))}
+                <div ref={bottomRef} />
+                <div className="animate-pulse text-emerald-500 font-bold">_</div>
+            </div>
+        </div>
+    );
+};
+
 // --- Views ---
 
 const DashboardView = () => {
@@ -655,15 +700,26 @@ const BioSolverView = () => {
     problem: "",
     constraints: "PFAS-Free"
   });
-  const [status, setStatus] = useState<'idle' | 'agents_working' | 'expert_validation' | 'complete'>('idle');
+  const [status, setStatus] = useState<'idle' | 'queued' | 'processing' | 'validating' | 'complete'>('idle');
+  const [logs, setLogs] = useState<LogEntry[]>([]);
   const [generatedAsset, setGeneratedAsset] = useState<R_D_Asset | null>(null);
   const [isSuggesting, setIsSuggesting] = useState(false);
+  const [taskId, setTaskId] = useState<string>("");
+
+  const addLog = (agent: LogEntry["agent"], message: string, status: LogEntry["status"] = "info") => {
+      setLogs(prev => [...prev, {
+          timestamp: new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+          agent,
+          message,
+          status
+      }]);
+  };
   
   const handleSuggestBottleneck = async () => {
       setIsSuggesting(true);
       try {
           if (!ai) return;
-          const prompt = `Generate a specific, complex, and random technical R&D bottleneck for the "${challengeData.sector}" industry. It should be a problem where nature/biomimicry might offer a solution (e.g. adhesion, friction, structural color, filtration). Output ONLY the one-sentence problem description.`;
+          const prompt = `Generate a specific, complex, and random technical R&D bottleneck for the "${challengeData.sector}" industry. It should be a problem where nature/biomimicry might offer a solution. Output ONLY the one-sentence problem description.`;
           const response = await ai.models.generateContent({
               model: "gemini-3-flash-preview",
               contents: prompt
@@ -679,38 +735,45 @@ const BioSolverView = () => {
   };
 
   const handleSolve = async () => {
-    setStatus('agents_working');
+    setStatus('queued');
+    setLogs([]);
+    const tid = `TASK-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+    setTaskId(tid);
+    
+    // Simulate Async Queue
+    addLog('System', `Request received. Task ID: ${tid}`, 'info');
+    await new Promise(r => setTimeout(r, 800));
+    addLog('System', 'Authenticating with API Gateway...', 'info');
+    await new Promise(r => setTimeout(r, 800));
+    addLog('System', 'Task enqueued in Redis (Priority: High)', 'success');
+    
+    setStatus('processing');
     
     try {
         if (!ai) throw new Error("AI not initialized");
         
-        // Simulating the 4-step agent pipeline delay
-        await new Promise(r => setTimeout(r, 2000)); // Indexer
-        await new Promise(r => setTimeout(r, 2000)); // Patent
-        await new Promise(r => setTimeout(r, 2000)); // Transposer
-        setStatus('expert_validation');
-        await new Promise(r => setTimeout(r, 1500)); // Expert
+        // Simulating the Agent Pipeline
+        await new Promise(r => setTimeout(r, 1000));
+        addLog('Indexer', `Scanning biological literature for "${challengeData.problem}"...`, 'info');
+        
+        await new Promise(r => setTimeout(r, 1500));
+        addLog('Indexer', 'Found 12 potential bio-analogs.', 'success');
+        addLog('Indexer', 'Filtering for TRL > 3 feasibility...', 'info');
+
+        await new Promise(r => setTimeout(r, 1200));
+        addLog('Patent', 'Checking global patent databases (WIPO, USPTO)...', 'info');
+        addLog('Patent', 'Analyzing Freedom-to-Operate (FTO) vectors...', 'warning');
+
+        await new Promise(r => setTimeout(r, 1500));
+        addLog('Supplier', 'Matching with EU Green Deal certified vendors...', 'info');
+        
+        setStatus('validating');
+        addLog('System', 'Synthesizing data package...', 'info');
 
         const prompt = `
-            Act as the "Synthesizer Agent" for the BaaS platform. 
-            Create a detailed R&D Asset for this problem: "${challengeData.problem}" in the sector: "${challengeData.sector}".
-            
-            You MUST generate the TIR Scores (Technology, IP, Resources, Market) based on realistic assessment.
-            Also generate 3-5 initial tasks for the roadmap with 'status' (todo), 'priority' (low/medium/high), 'assignee' (Role), and 'dueDate'.
-
-            Return JSON matching this schema:
-            {
-                "name": "Technical Title",
-                "category": "Industry Category",
-                "tir_scores": { "technology": 0-100, "ip": 0-100, "resources": 0-100, "market": 0-100, "composite": 0-100 },
-                "trl_current": 1-9,
-                "bio_analogs": [{ "species": "Latin Name", "mechanism": "Short description", "key_attribute": "Benefit" }],
-                "ip_status": { "freedom_to_operate": "High/Med/Low", "moat_duration_years": number, "patent_filing_strategy": "Strategy description" },
-                "supply_chain": [{ "vendor": "Name", "location": "Country", "capability": "Process", "certification": "ISO..." }],
-                "financials": { "capex_total": number, "roi_horizon_months": number, "revenue_stream": "Model" },
-                "roadmap": [{ "phase": "Name", "duration_months": number, "cost": number, "deliverables": "Output" }],
-                "tasks": [{ "id": "T-1", "title": "Task Name", "assignee": "Role", "dueDate": "YYYY-MM-DD", "status": "todo", "priority": "high/medium/low" }]
-            }
+            Act as the "Synthesizer Agent". Create a detailed R&D Asset for: "${challengeData.problem}" in "${challengeData.sector}".
+            Generate TIR Scores, roadmap, and tasks.
+            Return JSON matching the R_D_Asset schema structure (omitting TS types).
         `;
 
         const response = await ai.models.generateContent({
@@ -732,11 +795,17 @@ const BioSolverView = () => {
             ...data
         };
 
+        addLog('Synthesizer', 'Asset structure generated.', 'success');
+        addLog('System', 'Calculating TIR Composite Score...', 'info');
+        await new Promise(r => setTimeout(r, 800));
+        
         setGeneratedAsset(asset);
         setStatus('complete');
+        addLog('System', `Task ${tid} completed successfully.`, 'success');
 
     } catch (e) {
         console.error(e);
+        addLog('System', 'Error in agent pipeline execution.', 'error');
         setStatus('idle');
     }
   };
@@ -744,6 +813,13 @@ const BioSolverView = () => {
   if (status === 'complete' && generatedAsset) {
       return (
           <div className="animate-in fade-in slide-in-from-bottom-8 duration-700">
+              <div className="flex items-center gap-4 mb-6">
+                  <button onClick={() => setStatus('idle')} className="p-2 hover:bg-slate-800 rounded-full transition-colors text-slate-400">
+                      <ArrowRightLeft size={20} />
+                  </button>
+                  <div className="text-sm text-slate-500 font-mono">Result for Task: {taskId}</div>
+              </div>
+              
               <div className="flex justify-between items-start mb-6 border-b border-slate-800 pb-6">
                   <div>
                       <div className="flex items-center gap-2 mb-2">
@@ -915,25 +991,29 @@ const BioSolverView = () => {
                 </div>
             </div>
         ) : (
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-12 text-center">
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-12 text-center animate-in fade-in duration-500">
                 <div className="w-20 h-20 mx-auto mb-8 relative">
                     <div className="absolute inset-0 rounded-full border-4 border-slate-800"></div>
-                    <div className="absolute inset-0 rounded-full border-4 border-emerald-500 border-t-transparent animate-spin"></div>
-                    <Dna className="absolute inset-0 m-auto text-emerald-500 animate-pulse" size={32} />
+                    <div className={`absolute inset-0 rounded-full border-4 border-emerald-500 border-t-transparent ${status !== 'complete' ? 'animate-spin' : ''}`}></div>
+                    <Dna className="absolute inset-0 m-auto text-emerald-500" size={32} />
                 </div>
                 
                 <h3 className="text-xl font-bold text-white mb-2">
-                    {status === 'agents_working' && "Agents Orchestration Active"}
-                    {status === 'expert_validation' && "Expert Validation & Scoring"}
+                    {status === 'queued' && "Queueing Task..."}
+                    {status === 'processing' && "Agent Swarm Active"}
+                    {status === 'validating' && "Finalizing Synthesis"}
                 </h3>
-                <p className="text-slate-400 text-sm max-w-md mx-auto">
-                    {status === 'agents_working' && "Indexeur searching analogs... Brevets analyzing FTO... Transposeur matching suppliers..."}
-                    {status === 'expert_validation' && "Calculating TIR Score (Tech, IP, Resources, Market)... Generating Regulatory Alignment Report..."}
+                <p className="text-slate-400 text-sm max-w-md mx-auto mb-8">
+                    Task ID: <span className="font-mono text-emerald-400">{taskId}</span>
                 </p>
 
+                <AgentTerminal logs={logs} />
+
                 <div className="mt-8 flex justify-center gap-2">
-                    {['Index', 'Patent', 'Supply', 'Synth', 'Expert'].map((step, i) => (
-                        <div key={step} className={`w-2 h-2 rounded-full transition-all duration-500 ${i < (status === 'expert_validation' ? 4 : 2) ? 'bg-emerald-500' : 'bg-slate-800'}`} />
+                    {['queued', 'processing', 'validating', 'complete'].map((s, i) => (
+                        <div key={s} className={`w-2 h-2 rounded-full transition-all duration-500 ${
+                            ['queued', 'processing', 'validating', 'complete'].indexOf(status) >= i ? 'bg-emerald-500 scale-125' : 'bg-slate-800'
+                        }`} />
                     ))}
                 </div>
             </div>
@@ -1047,11 +1127,16 @@ const AssetsView = () => {
     const [activeTab, setActiveTab] = useState<'passport' | 'tasks'>('passport');
     const [compareMode, setCompareMode] = useState(false);
     const [selectedForCompare, setSelectedForCompare] = useState<string[]>([]);
+    const [searchQuery, setSearchQuery] = useState("");
     
     // Local state for assets to allow task updates (in a real app this would be global store)
     const [assets, setAssets] = useState<R_D_Asset[]>(MOCK_ASSETS);
     
     const selectedAsset = assets.find(a => a.id === selectedAssetId) || assets[0];
+    const filteredAssets = assets.filter(a => 
+        a.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+        a.id.toLowerCase().includes(searchQuery.toLowerCase())
+    );
 
     const toggleCompareSelection = (id: string, e: React.MouseEvent) => {
         e.stopPropagation();
@@ -1089,21 +1174,33 @@ const AssetsView = () => {
             <div className="h-[calc(100vh-8rem)] flex gap-6 animate-in fade-in duration-500">
                 {/* Left Sidebar: Asset List */}
                 <div className="w-80 flex flex-col gap-4 border-r border-slate-800 pr-6">
-                    <div className="flex justify-between items-center mb-2">
-                        <h2 className="text-lg font-bold text-white">Digital Vault</h2>
-                        <div className="flex gap-2">
-                            <button 
-                                onClick={() => { setCompareMode(!compareMode); setSelectedForCompare([]); }} 
-                                className={`p-2 rounded-lg border transition-colors ${compareMode ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50' : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'}`}
-                                title="Compare Assets"
-                            >
-                                <ArrowRightLeft size={16}/>
-                            </button>
-                            <button className="p-2 bg-emerald-500/10 text-emerald-400 rounded-lg border border-emerald-500/20 hover:bg-emerald-500/20"><Plus size={16}/></button>
+                    <div className="mb-2">
+                        <div className="flex justify-between items-center mb-4">
+                            <h2 className="text-lg font-bold text-white">Digital Vault</h2>
+                            <div className="flex gap-2">
+                                <button 
+                                    onClick={() => { setCompareMode(!compareMode); setSelectedForCompare([]); }} 
+                                    className={`p-2 rounded-lg border transition-colors ${compareMode ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50' : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'}`}
+                                    title="Compare Assets"
+                                >
+                                    <ArrowRightLeft size={16}/>
+                                </button>
+                                <button className="p-2 bg-emerald-500/10 text-emerald-400 rounded-lg border border-emerald-500/20 hover:bg-emerald-500/20"><Plus size={16}/></button>
+                            </div>
+                        </div>
+                        <div className="relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
+                            <input 
+                                type="text" 
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                placeholder="Search Vault..."
+                                className="w-full bg-slate-900 border border-slate-700 rounded-lg pl-9 pr-3 py-2 text-sm text-white focus:border-emerald-500 outline-none"
+                            />
                         </div>
                     </div>
                     <div className="flex-1 overflow-y-auto space-y-3 pb-20">
-                        {assets.map(asset => (
+                        {filteredAssets.map(asset => (
                             <div 
                                 key={asset.id}
                                 onClick={() => !compareMode && setSelectedAssetId(asset.id)}
